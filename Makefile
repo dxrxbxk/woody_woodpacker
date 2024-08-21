@@ -123,7 +123,7 @@ override VFLAGS := valgrind --leak-check=full --show-leak-kinds=all --track-orig
 override CXX := $(shell which clang)
 
 # compiler standard
-override STD := -std=c89 -m64
+override STD := -std=c99 -m64
 
 # compiler optimization
 override OPT := -O3

@@ -10,7 +10,9 @@ int	ft_strlen(char *str) {
 	return (i);
 }
 
-int handle_syscall(char *msg) {
+int handle_syscall(char *msg, int fd) {
+	if (fd != -1)
+		close(fd);
 	perror(msg);
 	exit(EXIT_FAILURE);
 }
