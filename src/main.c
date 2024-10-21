@@ -15,7 +15,6 @@
 #define PT_LOAD 1
 #define PF_X 1
 
-char code[] = "\x31\xc0\x99\xb2\x0a\xff\xc0\x89\xc7\x48\x8d\x35\x12\x00\x00\x00\x0f\x05\xb2\x2a\x31\xc0\xff\xc0\xf6\xe2\x89\xc7\x31\xc0\xb0\x3c\x0f\x05\x2e\x2e\x57\x4f\x4f\x44\x59\x2e\x2e\x0a";
 
 typedef struct Elf64Hdr_s {
   uint8_t     e_ident[16];         /* Magic number and other info */
@@ -58,6 +57,9 @@ typedef struct {
 	uint64_t sh_addralign;  /* Alignement de section */
 	uint64_t sh_entsize;    /* Taille d'entrée de section */
 } Elf64_Shdr;
+
+const char shellcode[] = "\x31\xc0\x99\xb2\x0a\xff\xc0\x89\xc7\x48\x8d\x35\x12\x00\x00\x00\x0f\x05\xb2\x2a\x31\xc0\xff\xc0\xf6\xe2\x89\xc7\x31\xc0\xb0\x3c\x0f\x05\x2e\x2e\x57\x4f\x4f\x44\x59\x2e\x2e\x0a";
+size_t shellcode_length = sizeof(shellcode) - 1;
 
 void print_data(const uint8_t *data, size_t size) {
 	size_t i = 0;
@@ -111,6 +113,24 @@ void encrypt(uint8_t *data, size_t size, uint8_t key) {
     }
 }
 
+int	get_shellcode_size(const char *code) {
+	int i = 0;
+	int size = 0;
+	printf("code: %s\n", code);
+	while (code[i] != '\0') {
+		if (code[i] == '\\')
+			size++;
+		i++;
+	}
+	return size;
+}
+
+void print_shellcode(const char *code) {
+	for (size_t i = 0; i < shellcode_length; i++) {
+		printf("\\x%02x", (unsigned char)shellcode[i]);
+	}
+}
+
 void *get_section_data(void *file_map, Elf64Hdr_t *header, const char *section_name, size_t *section_size) {
     Elf64_Shdr *sections = (Elf64_Shdr *)((char *)file_map + header->e_shoff);
     Elf64_Shdr *section;
@@ -123,6 +143,7 @@ void *get_section_data(void *file_map, Elf64Hdr_t *header, const char *section_n
 
         if (strcmp(name, section_name) == 0) {
             *section_size = section->sh_size;
+			print_data((uint8_t *)file_map + section->sh_offset, section->sh_size);
             return (char *)file_map + section->sh_offset;
         }
     }
@@ -130,22 +151,31 @@ void *get_section_data(void *file_map, Elf64Hdr_t *header, const char *section_n
     return NULL;
 }
 
-void patch_shellcode(void *file_map, Elf64Hdr_t *header, Elf64_Phdr *load_segment, const char *code, size_t code_size) {
+void patch_shellcode(void *file_map, Elf64Hdr_t *header, Elf64_Phdr *load_segment, void *section_data, size_t section_size) {
     void *shellcode_addr = (char *)file_map + load_segment->p_vaddr;
     size_t segment_size = load_segment->p_memsz;
+	size_t pfile = load_segment->p_filesz;
 
-    if (code_size > segment_size) {
-        fprintf(stderr, "Shellcode too big\n");
-        exit(1);
-    }
+	printf("shellcode_addr: %p\n", shellcode_addr);
+	printf("segment_size: %lu\n", segment_size);
+	printf("section_size: %lu\n", section_size);
 
-    memcpy(shellcode_addr, code, code_size);
+	section_size += shellcode_length;
+	segment_size += shellcode_length;
+	pfile += shellcode_length;
+
+
+	if (section_size > segment_size) {
+		handle_error("Shellcode too big\n");
+	}
+
+	memmove(&shellcode_addr + shellcode_length, shellcode_addr, section_size);
+	memcpy(shellcode_addr, shellcode, shellcode_length);
+
+
+	print_data((uint8_t *)shellcode_addr, segment_size);
 
 	header->e_entry = load_segment->p_vaddr;
-
-	if (mprotect(shellcode_addr, code_size, PROT_READ | PROT_EXEC) == -1)
-		handle_syscall("mprotect", -1);
-
 }
 
 int	check_file(char *filename) {
@@ -191,10 +221,7 @@ int	check_file(char *filename) {
 	if (section_data == NULL)
 		return handle_error("No .text section found\n");
 
-	printf("Section_data: %p\n", section_data);
-	printf("Section_size: %lx\n", section_size);
-
-	patch_shellcode(file_map, header, load_segment, code, sizeof(code));
+	patch_shellcode(file_map, header, load_segment, section_data, section_size);
 
 	printf("load_segment->p_vaddr: %lx\n", load_segment->p_vaddr);
 	printf("header->e_entry: %lx\n", header->e_entry);
