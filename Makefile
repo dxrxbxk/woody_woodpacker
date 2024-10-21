@@ -37,8 +37,6 @@ override MAKEFLAGS += --warn-undefined-variables --no-builtin-rules
 override THREAD    := $(shell nproc)
 
 
-
-
 # -- D I R E C T O R I E S ----------------------------------------------------
 
 # source directory
@@ -194,6 +192,7 @@ clean:
 
 fclean: clean
 	@$(RM) $(NAME)
+	$(RM) woody
 
 
 # -- R E C O M P I L E --------------------------------------------------------

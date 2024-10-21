@@ -1,0 +1,3 @@
+objcopy -O binary --only-section=.text woody_test woody_test.bin
+
+hexdump -v -e '"\\x" 1/1 "%02x"' woody_text.bin
