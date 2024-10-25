@@ -18,6 +18,8 @@
 #define PT_LOAD 1
 #define PF_X 1
 
+typedef uint64_t	Elf64_Addr;
+
 int		ft_strlen(char *str);
 int		handle_error(char *msg);
 int		handle_syscall(char *msg, int fd);
@@ -63,6 +65,15 @@ typedef struct {
 	uint64_t 	sh_addralign;  		/* Section alignment */
 	uint64_t 	sh_entsize;			/* Entry size if section holds table */
 } Elf64Shdr_t;
+
+typedef struct patch_s{
+	/* offset from payload to pgm entrypoint */
+	uint64_t				entry_offset;
+	/* offset from payload to text entrypoint */
+	uint64_t				text_offset;
+	/* offset from payload to begin of segment */
+	uint64_t				segment_offset;
+} patch_t;
 
 typedef struct data_s {
 	uint8_t					*_file_map;

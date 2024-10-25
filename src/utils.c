@@ -45,12 +45,6 @@ void print_data(const uint8_t *data, size_t size) {
     }
 }
 
-void print_shellcode(const char *code) {
-	size_t shellcode_length = ft_strlen((char*)code);
-	for (size_t i = 0; i < shellcode_length; i++) {
-		printf("\\x%02x", (unsigned char)code[i]);
-	}
-}
 
 uint64_t gen_key_64(void) {
 	int	fd = open("/dev/urandom", O_RDONLY);
