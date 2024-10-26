@@ -1,21 +1,24 @@
 #include "utils.h"
 
-
 //char	shellcode[]			= "\x48\x31\xc0\xb0\x01\xbf\x01\x00\x00\x00\x48\x8d\x35\x13\x00\x00\x00\xba\x0f\x00\x00\x00\x0f\x05\x48\x31\xc0\xb0\x3c\xbf\x2a\x00\x00\x00\x0f\x05\x2e\x2e\x2e\x2e\x57\x4f\x4f\x44\x59\x2e\x2e\x2e\x2e\x0a\x0d";
 //char shellcode[] = 
-//    "\x48\x31\xc0"              // xor    rax, rax         ; RAZ de rax
-//    "\xb0\x01"                  // mov    al, 1            ; set rax = 1 (sys_exit)
-//    "\xbf\x01\x00\x00\x00"      // mov    edi, 1           ; set rdi = 1 (stdout)
-//    "\x48\x8d\x35\x13\x00\x00\x00" // lea    rsi, [rip+0x13] ; charge l'adresse du message dans rsi
-//    "\xba\x0f\x00\x00\x00"      // mov    edx, 15          ; set edx = 15 (taille du message)
-//    "\x0f\x05"                  // syscall                 ; appel système (write)
-//    "\x48\x31\xc0"              // xor    rax, rax         ; RAZ de rax pour prochain appel
-//    "\xb0\x3c"                  // mov    al, 0x3c         ; set rax = 60 (sys_exit)
-//    "\xbf\x2a\x00\x00\x00"      // mov    edi, 42          ; code de retour = 42
-//    "\x0f\x05"                  // syscall                 ; appel système (exit)
-//    "\x2e\x2e\x2e\x2e"          // "...."                  ; début du message à afficher
-//    "\x57\x4f\x4f\x44\x59"      // "WOODY"                ; contenu du message
-//    "\x2e\x2e\x2e\x2e\x0a\x0d"; // "....\n\r"             ; fin du message avec retour de ligne
+//    "\x48\x52"                         // push   rdx                  ; Push rdx onto the stack
+//    "\x48\x31\xc0"                     // xor    rax, rax             ; RAZ de rax
+//    "\xb0\x01"                         // mov    al, 1                ; sys_write syscall
+//    "\xbf\x01\x00\x00\x00"             // mov    edi, 1               ; Set edi to 1 (stdout)
+//    "\x48\x8d\x35\x13\x00\x00\x00"     // lea    rsi, [rip+0x13]      ; Load address of message
+//    "\xba\x0f\x00\x00\x00"             // mov    edx, 15              ; Set edx (message length)
+//    "\x0f\x05"                         // syscall                     ; Write syscall
+//
+//    "\x48\x31\xc0"                     // xor    rax, rax             ; RAZ de rax pour prochain appel
+//    "\x48\xc7\xc0\x50\x10\x00\x00"     // mov    rax, 0x1050          ; Load the address 0x1050 into rax
+//    "\x58"                             // pop    rdx                  ; Restore rdx from the stack
+//    "\xff\xe0"                         // jmp    rax                  ; Jump to 0x1050
+//
+//    "\x2e\x2e\x2e\x2e"                 // "...."                      ; Start of message
+//    "\x57\x4f\x4f\x44\x59"             // "WOODY"                     ; Message content
+//    "\x2e\x2e\x2e\x2e\x0a\x0d";        // "....\n\r"                  ; End of message
+									   //
 char shellcode[] = 
     "\x48\x31\xc0"                     // xor    rax, rax           ; RAZ de rax
     "\xb0\x01"                         // mov    al, 1              ; set rax = 1 (sys_write)
@@ -28,33 +31,52 @@ char shellcode[] =
     "\x48\xc7\xc0\x50\x10\x00\x00"     // mov    rax, 0x1050        ; l'ancien entrypoint à 0x1050
     "\xff\xe0"                         // jmp    rax                ; sauter à l'ancien entrypoint
 
+    // Message à afficher
     "\x2e\x2e\x2e\x2e"                 // "...."                    ; début du message à afficher
     "\x57\x4f\x4f\x44\x59"             // "WOODY"                   ; contenu du message
-    "\x2e\x2e\x2e\x2e\x0a\x0d";         // "....\n\r"               ; fin du message avec retour de ligne
+    "\x2e\x2e\x2e\x2e\x0a\x0d"     ;    // "....\n\r"
+     // "....\n\r"               ; fin du message avec retour de ligne
 
-
-//mov[] and fill the rest with null bytes
-char mov[] = {0x48, 0xc7, 0xc0, 0x50, 0x10, 0x00, 0x00};
-char jmp[] = {0xff, 0xe0};
-
-//char shellcode[] = "\xb8\x01\x00\x00\x00\xbf\x01\x00\x00\x00\x48\x8d\x35\x0f\x00\x00\x00\xba\x06\x00\x00\x00\x0f\x05\x48\x31\xc0\x48\x31\xff\x0f\x05\x57\x4f\x4f\x44\x59\x0a\x4b\x4a\x3b\x3a\x2b\x2a\x1b\x1a";
-//char shellcode[] = {
-//    // Instructions pour le shellcode
-//    0xb8, 0x01, 0x00, 0x00, 0x00, // mov eax, 1
-//    0xbf, 0x01, 0x00, 0x00, 0x00, // mov edi, 1
-//    0x48, 0x8d, 0x35, 0x0f, 0x00, 0x00, 0x00, // lea rsi, [rel msg]
-//    0xba, 0x06, 0x00, 0x00, 0x00, // mov edx, 6
-//    0x0f, 0x05, // syscall (write)
-//    0x48, 0x31, 0xc0, // xor rax, rax
-//    0x48, 0x31, 0xff, // xor rdi, rdi
-//    0x0f, 0x05, // syscall (exit)
+// Déclaration de msg
+//char shellcode[] = 
+//    "\x48\x31\xc0"                       // xor rax, rax                ; RAZ de rax
+//    "\x48\x89\xc2"                       // mov rdx, rax                ; RAZ de rdx (taille du message)
+//    "\x48\x8d\x3d\x1a\x00\x00\x00"       // lea rdi, [rip + 0x1a]       ; adresse du message
+//    "\xb8\x01\x00\x00\x00"               // mov eax, 1                  ; sys_write
+//    "\xba\x0e\x00\x00\x00"               // mov edx, 14                 ; taille du message (14)
+//    "\x0f\x05"                           // syscall                     ; appel système (write)
+//
+//    "\x48\xc7\xc0\x50\x10\x00\x00"       // mov rax, 0x1050            ; adresse de l'entrypoint
+//    "\xff\xe0"                           // jmp rax                    ; sauter à l'entrypoint
 //
 //    // Message à afficher
-//    0x57, 0x4f, 0x4f, 0x44, 0x59, 0x0a, // "WOODY\n"
-//	// jmp to the old entrypoint
-//	0xe9, 0x00, 0x00, 0x00, 0x00, // jmp 0
-//	0x00, 0x00, 0x00, 0x00, // old entrypoint
-//};
+//    "\x2e\x2e\x2e\x2e"                   // "...."
+//    "\x57\x4f\x4f\x44\x59"               // "WOODY"
+//    "\x2e\x2e\x2e\x2e\x0a";              // "....\n"
+										 //
+//char shellcode[] = 
+//    "\x52"                                // push rdx
+//    "\xbf\x00\x00\x40\x00"                // mov rdi, 0x400000 (adresse)
+//    "\xbe\x00\x10\x00\x00"                // mov rsi, 0x1000 (taille)
+//    "\xba\x07\x00\x00\x00"                // mov rdx, 0x7 (PROT_READ | PROT_WRITE | PROT_EXEC)
+//    "\xb8\x0a\x00\x00\x00"                // mov rax, 0xa (syscall: mprotect)
+//    "\x0f\x05"                            // syscall
+//
+//    "\xbf\x01\x00\x00\x00"                // mov rdi, 1 (stdout)
+//    "\x48\xbe\x3c\x00\x00\x00\x00\x00\x00\x00" // mov rsi, msg (adresse du message)
+//    "\xba\x0e\x00\x00\x00"                // mov rdx, 0xe (longueur du message)
+//    "\xb8\x01\x00\x00\x00"                // mov rax, 1 (syscall: write)
+//    "\x0f\x05"                            // syscall
+//
+//    "\xbf\x50\x10\x00\x00"                // mov rdi, entry_offset (0x1050)
+//    "\x5a"                                // pop rdx
+//    "\xff\xe7"                            // jmp rdi
+//
+//    "\x2e\x2e\x2e\x2e"                    // "...."
+//    "\x57\x4f\x4f\x44\x59"                // "WOODY"
+//    "\x2e\x2e\x2e\x2e\x0a";                // "....\n"
+char mov[] = {0x48, 0xc7, 0xc0, 0x50, 0x10, 0x00, 0x00};
+char jmp[] = {0xff, 0xe0};
 
 //#define shellcode_size		sizeof(shellcode)
 //Map the target in memory (mmap()) and sanitize it (looking for ELF).
@@ -139,6 +161,19 @@ Elf64Shdr_t	*get_section_by_name(data_t *data, const char *name) {
 	for (size_t i = 0; i < header->e_shnum; i++) {
 		if (strcmp(strtab_p + sections[i].sh_name, name) == 0) {
 			printf("Found section %s at %lx\n", name, sections[i].sh_addr);
+			return &sections[i];
+		}
+	}
+	return NULL;
+}
+
+Elf64Shdr_t	*get_section_by_address(data_t *data, size_t address) {
+	Elf64Hdr_t	*header = (Elf64Hdr_t *)data->_file_map;
+	Elf64Shdr_t	*sections = (Elf64Shdr_t *)(data->_file_map + header->e_shoff);
+
+	for (size_t i = 0; i < header->e_shnum; i++) {
+		if (sections[i].sh_addr == address) {
+			printf("Found section at %lx\n", address);
 			return &sections[i];
 		}
 	}
@@ -235,13 +270,17 @@ static int	inject_shellcode(void) {
 
 	memcpy(data->_file_map + codecave_offset, shellcode, shellcode_size);
 	//mov_modify(old_entry);
-	//memcpy(data->_file_map + codecave_offset + shellcode_size, mov, sizeof(mov));
-	//memcpy(data->_file_map + codecave_offset + shellcode_size + sizeof(mov), jmp, sizeof(jmp));
+//	memcpy(data->_file_map + codecave_offset + shellcode_size, mov, sizeof(mov));
+//	memcpy(data->_file_map + codecave_offset + shellcode_size + sizeof(mov), jmp, sizeof(jmp));
 
 	print_hex(mov, sizeof(mov));
 	print_hex(jmp, sizeof(jmp));
 
-	printf("section name: %u\n", shdr->sh_name);
+
+	printf("Shellcode injected at %lx\n", codecave_offset);
+	printf("p_filesz: %lx\n", phdr->p_filesz);
+	printf("p_memsz: %lx\n", phdr->p_memsz);
+	printf("sh_size: %lx\n", shdr->sh_size);
 
 	ehdr->e_entry = codecave_offset;
 	phdr->p_filesz += shellcode_size;
