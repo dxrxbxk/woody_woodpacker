@@ -18,41 +18,40 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
-char shellcode[] = 
-    "\x52"                                // push rdx
-    "\xbf\x00\x00\x40\x00"                // mov rdi, 0x400000 (adresse)
-    "\xbe\x00\x10\x00\x00"                // mov rsi, 0x1000 (taille)
-    "\xba\x07\x00\x00\x00"                // mov rdx, 0x7 (PROT_READ | PROT_WRITE | PROT_EXEC)
-    "\xb8\x0a\x00\x00\x00"                // mov rax, 0xa (syscall: mprotect)
-    "\x0f\x05"                            // syscall
-
-    "\xbf\x01\x00\x00\x00"                // mov rdi, 1 (stdout)
-    "\x48\xbe\x2e\x2e\x2e\x2e\x57\x4f\x4f\x44\x59" // mov rsi, msg (adresse du message)
-    "\xba\x0e\x00\x00\x00"                // mov rdx, 0xe (longueur du message)
-    "\xb8\x01\x00\x00\x00"                // mov rax, 1 (syscall: write)
-    "\x0f\x05"                            // syscall
-
-    "\xbf\x50\x10\x00\x00"                // mov rdi, entry_offset (0x1050)
-    "\x5a"                                // pop rdx
-    "\xff\xe7"                            // jmp rdi
-
-    "\x2e\x2e\x2e\x2e"                    // "...."
-    "\x57\x4f\x4f\x44\x59"                // "WOODY"
-    "\x2e\x2e\x2e\x2e\x0a";                // "....\n"
+#include <stdio.h>
+#include <string.h>
 
 int main() {
-    // Protéger la mémoire pour que le shellcode soit exécutable
-    if (mprotect((void*)((uintptr_t)shellcode & ~0xFFF), 4096, PROT_READ | PROT_WRITE | PROT_EXEC) == -1) {
-        perror("mprotect");
-        return 1;
-    }
+    // Message à afficher
+    char msg[] = "Injected Message\n";
 
-    printf("Shellcode Length:  %lu\n", sizeof(shellcode));
+    // Shellcode
+    char shellcode[] = {
+        0x52,                           // push rdx
+        0x50,                           // push rax
+        0xb8, 0x01, 0x00, 0x00, 0x00,  // mov rax, 1        ; syscall: write
+        0xbf, 0x01, 0x00, 0x00, 0x00,  // mov rdi, 1        ; STDOUT_FILENO
+        0x48, 0x8d, 0x35, 0x0e, 0x00, 0x00, 0x00, // lea rsi, [rip + offset] ; adresse du message
+        0xba, 0x16, 0x00, 0x00, 0x00,  // mov rdx, 22      ; longueur du message
+        0x0f, 0x05,                    // syscall           ; appel système (write)
+        0x58,                           // pop rax           ; restaure rax
+        0x5a,                           // pop rdx           ; restaure rdx
+        0xb8, 0x3c, 0x00, 0x00, 0x00,  // mov rax, 60      ; syscall: exit
+        0x48, 0x31, 0xff,              // xor rdi, rdi     ; code de retour 0
+        0x0f, 0x05,                    // syscall           ; appel système (exit)
+    };
 
-    int (*func)();
-    func = (int (*)()) shellcode;
-    (int)(*func)();
-    
+    // Calculer l'offset du message
+    *(unsigned long *)(shellcode + 0x0e) = (unsigned long)(msg);
+
+	if (mprotect((void *)((unsigned long)shellcode & ~0xFFF), 4096, PROT_READ | PROT_WRITE | PROT_EXEC) == -1) {
+		perror("mprotect");
+		return 1;
+	}
+
+    // Exécution du shellcode
+    void (*func)() = (void (*)())shellcode;
+    func();
+
     return 0;
 }
-

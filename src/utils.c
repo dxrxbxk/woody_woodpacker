@@ -25,55 +25,56 @@ int	handle_error(char *msg) {
 	return (EXIT_FAILURE);
 }
 
-void print_data(const uint8_t *data, size_t size) {
-	size_t i = 0;
-    if (data == NULL || size == 0) {
-        printf("No data\n");
-        return;
-    }
+data_t*	get_data(void) {
+	static data_t *data = NULL;
 
-    for (; i < size; i++) {
-        printf("%02x ", data[i]);
+	if (data == NULL) {
+		data = malloc(sizeof(data_t));
+		if (data == NULL)
+			handle_error("malloc");
 
-        if ((i + 1) % 16 == 0) {
-            printf("\n");
-        }
-    }
+		data->_file_map = NULL;
+		data->_file_size = 0;
 
-    if (size % 16 != 0) {
-        printf("\n");
-    }
+	}
+
+	return data;
 }
 
+void	free_data(void) {
+	data_t *data = get_data();
 
-uint64_t gen_key_64(void) {
-	int	fd = open("/dev/urandom", O_RDONLY);
-	if (fd == -1)
-		handle_syscall("open", fd);
-
-	uint64_t key;
-	if (read(fd, &key, sizeof(uint64_t)) == -1)
-		handle_syscall("read", fd);
-
-	close(fd);
-	return key;
+	if (data) {
+		if (data->_file_map)
+			munmap(data->_file_map, data->_file_size);
+		free(data);
+	}
 }
 
-uint8_t gen_key(void) {
-	int	fd = open("/dev/urandom", O_RDONLY);
-	if (fd == -1)
-		handle_syscall("open", fd);
+void	ft_memcpy(void *dst, void *src, size_t size) {
+	uint8_t *d = dst;
+	uint8_t *s = src;
 
-	uint8_t key;
-	if (read(fd, &key, sizeof(uint8_t)) == -1)
-		handle_syscall("read", fd);
-
-	close(fd);
-	return key;
+	for (size_t i = 0; i < size; i++) {
+		d[i] = s[i];
+	}
 }
 
-void encrypt(uint8_t *data, size_t size, uint8_t key) {
-    for (size_t i = 0; i < size; i++) {
-        data[i] ^= key;
-    }
+void ft_memset(void *dst, int c, size_t size) {
+	uint8_t *d = dst;
+
+	for (size_t i = 0; i < size; i++) {
+		d[i] = c;
+	}
+}
+
+int ft_memcmp(void *s1, void *s2, size_t size) {
+	uint8_t *str1 = s1;
+	uint8_t *str2 = s2;
+
+	for (size_t i = 0; i < size; i++) {
+		if (str1[i] != str2[i])
+			return (str1[i] - str2[i]);
+	}
+	return (0);
 }
