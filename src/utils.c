@@ -13,10 +13,9 @@ int	ft_strlen(char *str) {
 	return (i);
 }
 
-int handle_syscall(char *msg, int fd) {
-	if (fd != -1)
-		close(fd);
+int handle_syscall(char *msg) {
 	perror(msg);
+	free_data();
 	exit(EXIT_FAILURE);
 }
 
@@ -51,13 +50,14 @@ void	free_data(void) {
 	}
 }
 
-void	ft_memcpy(void *dst, void *src, size_t size) {
+void	*ft_memcpy(void *dst, const void *src, size_t size) {
 	uint8_t *d = dst;
-	uint8_t *s = src;
+	uint8_t *s = (uint8_t *)src;
 
 	for (size_t i = 0; i < size; i++) {
 		d[i] = s[i];
 	}
+	return (dst);
 }
 
 void ft_memset(void *dst, int c, size_t size) {
@@ -68,9 +68,9 @@ void ft_memset(void *dst, int c, size_t size) {
 	}
 }
 
-int ft_memcmp(void *s1, void *s2, size_t size) {
-	uint8_t *str1 = s1;
-	uint8_t *str2 = s2;
+int ft_memcmp(const void *s1, const void *s2, size_t size) {
+	uint8_t *str1 = (uint8_t *)s1;
+	uint8_t *str2 = (uint8_t *)s2;
 
 	for (size_t i = 0; i < size; i++) {
 		if (str1[i] != str2[i])
