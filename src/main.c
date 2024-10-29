@@ -7,68 +7,48 @@ char shellcode[] = "\x52\xb8\x0a\x00\x00\x00\x50\x48\xb8\x20\x4d\x65\x73\x73\x61
 char mov[] = {0x48, 0xc7, 0xc0, 0x50, 0x10, 0x00, 0x00};
 char jmp[] = {0xff, 0xe0};
 
-static void patch_jump(char *code, uintptr_t target_address) {
-    uintptr_t jump_address = (uintptr_t)code + sizeof(shellcode) - 5; // Address of the jmp instruction
-    int32_t offset = target_address - (jump_address + 5); // Calculate offset
-
-    // Patch the jump instruction
-    code[sizeof(shellcode) - 1] = (offset & 0xFF);          // Lower byte
-    code[sizeof(shellcode) - 2] = (offset >> 8) & 0xFF;     // 2nd byte
-    code[sizeof(shellcode) - 3] = (offset >> 16) & 0xFF;    // 3rd byte
-    code[sizeof(shellcode) - 4] = (offset >> 24) & 0xFF;    // Higher byte
-}
+#define PAGE_SIZE 4096  // Typically 4096 bytes for x86 architecture
+#define PAGE_ROUND(x) (((x) + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1))
 
 
-static Elf64_Phdr*	parse_program_headers(data_t *data, size_t *codecave_offset, size_t *codecave_size) {
-	
-	Elf64_Ehdr	*header = (Elf64_Ehdr *)data->_file_map;
-	Elf64_Phdr	*program_headers = (Elf64_Phdr *)(data->_file_map + header->e_phoff);
+static Elf64_Phdr*	get_phdr_text(data_t *data) {
+	Elf64_Ehdr	*ehdr = (Elf64_Ehdr *)data->_file_map;
+	Elf64_Phdr	*phdr = (Elf64_Phdr *)(data->_file_map + ehdr->e_phoff);
+	Elf64_Addr	original_offset = 0;
+	Elf64_Addr	original_vaddr = 0;
 
-	size_t shellcode_size = sizeof(shellcode) - 1;
-	for (size_t i = 0; i < header->e_phnum; i++) {
-		if (program_headers[i].p_type == PT_LOAD && program_headers[i].p_flags & PF_X) {
-			Elf64_Phdr *next = &program_headers[i + 1];
-			size_t end_of_segment = program_headers[i].p_offset + program_headers[i].p_filesz;
+	for (size_t i = 0; i < ehdr->e_phnum; i++) {
+		if (phdr[i].p_type == PT_LOAD && phdr[i].p_flags & PF_X) {
+			printf("Found text segment at %lx\n", phdr[i].p_offset);
 
-			if (i + 1 < header->e_phnum && next->p_type == PT_LOAD) {
-				*codecave_offset = end_of_segment;
-				*codecave_size = next->p_offset - end_of_segment;
-				printf("Found codecave program header.address: %lx, offset: %lx, size: %lx\n", program_headers[i].p_vaddr, *codecave_offset, *codecave_size);
+			original_vaddr = phdr[i].p_vaddr;
+			original_offset = phdr[i].p_offset;
 
-				if (*codecave_size >= shellcode_size) {
-					printf("Codecave size: %zu, offset: %zu, shellcode size: %lu\n", *codecave_size, *codecave_offset, shellcode_size);
-					return &program_headers[i];
+			printf("Original offset: %lx\n", original_offset);
+
+			printf("Original vaddr: %lx\n", original_vaddr);
+
+			phdr[i].p_vaddr -= PAGE_ROUND(sizeof(shellcode));
+			phdr[i].p_paddr -= PAGE_ROUND(sizeof(shellcode));
+
+			printf("New vaddr: %lx\n", phdr[i].p_vaddr);
+
+			phdr[i].p_filesz += PAGE_ROUND(sizeof(shellcode));
+			phdr[i].p_memsz += PAGE_ROUND(sizeof(shellcode));
+
+			for (size_t j = 0; j < ehdr->e_phnum; j++) {
+				if (phdr[j].p_offset > original_offset) {
+					phdr[j].p_offset += PAGE_ROUND(sizeof(shellcode));
 				}
 			}
 
-		}
-	}
-	return NULL;
-}
+			printf("old entry: %lx\n", ehdr->e_entry);
 
-static Elf64_Shdr	*get_section_by_name(data_t *data, const char *name) {
-	Elf64_Ehdr	*header = (Elf64_Ehdr *)data->_file_map;
-	Elf64_Shdr	*sections = (Elf64_Shdr *)(data->_file_map + header->e_shoff);
-	Elf64_Shdr	*strtab = &sections[header->e_shstrndx];
-	char		*strtab_p = (char *)data->_file_map + strtab->sh_offset;
+			ehdr->e_entry = original_vaddr - PAGE_ROUND(sizeof(shellcode)) + sizeof(Elf64_Ehdr);
 
-	for (size_t i = 0; i < header->e_shnum; i++) {
-		if (strcmp(strtab_p + sections[i].sh_name, name) == 0) {
-			printf("Found section %s at %lx\n", name, sections[i].sh_addr);
-			return &sections[i];
-		}
-	}
-	return NULL;
-}
+			printf("new entry: %lx\n", ehdr->e_entry);
 
-static Elf64_Shdr	*get_section_by_address(data_t *data, size_t address) {
-	Elf64_Ehdr	*header = (Elf64_Ehdr *)data->_file_map;
-	Elf64_Shdr	*sections = (Elf64_Shdr *)(data->_file_map + header->e_shoff);
-
-	for (size_t i = 0; i < header->e_shnum; i++) {
-		if (sections[i].sh_addr == address) {
-			printf("Found section at %lx\n", address);
-			return &sections[i];
+			return &phdr[i];
 		}
 	}
 	return NULL;
@@ -78,11 +58,35 @@ static int patch_new_file(data_t *data) {
 
 	int fd = open("woody", O_CREAT | O_WRONLY | O_TRUNC, 0755);
 	if (fd == -1)
-		handle_syscall("open", fd);
+		handle_syscall("open");
 
-	if (write(fd, data->_file_map, data->_file_size) == -1)
-		handle_syscall("write", fd);
+	Elf64_Ehdr	*ehdr = (Elf64_Ehdr *)data->_file_map;
+	Elf64_Phdr	*phdr = (Elf64_Phdr *)(data->_file_map + ehdr->e_phoff);
 
+	size_t		phdr_size = ehdr->e_phnum * ehdr->e_phentsize;
+	size_t		new_size = data->_file_size + PAGE_ROUND(sizeof(shellcode));
+
+	uint8_t	*new_data = malloc(new_size);
+	if (new_data == NULL)
+		handle_syscall("malloc");
+
+	ft_memcpy(new_data, ehdr, sizeof(Elf64_Ehdr));
+
+	ft_memcpy(new_data + ehdr->e_phoff, phdr, phdr_size);
+
+	Elf64_Shdr	*shdr = (Elf64_Shdr *)(data->_file_map + ehdr->e_shoff);
+	size_t		shdr_size = ehdr->e_shnum * ehdr->e_shentsize;
+
+	ft_memcpy(new_data + ehdr->e_shoff, shdr, shdr_size);
+
+
+	ft_memcpy(new_data + ehdr->e_shoff - PAGE_ROUND(sizeof(shellcode)), shellcode, sizeof(shellcode));
+
+	ssize_t written = write(fd, new_data, new_size);
+	if (written == -1)
+		handle_syscall("write");
+
+	free(new_data);
 	close(fd);
 
 	return (EXIT_SUCCESS);
@@ -92,48 +96,27 @@ static int patch_new_file(data_t *data) {
 static int	inject_payload(void) {
 
 	data_t *data = get_data();
-	size_t	codecave_offset = 0;
-	size_t	codecave_size = 0;
+
+	Elf64_Addr original_vaddr = 0;
+	size_t shellcode_size = sizeof(shellcode) - 1;
+
 	Elf64_Ehdr	*ehdr = (Elf64_Ehdr *)data->_file_map;
 
 
-	Elf64_Phdr	*phdr = parse_program_headers(data, &codecave_offset, &codecave_size);
-	if (phdr == NULL)
-		return handle_error("No codecave found\n");
+	printf("Shellcode size: %li\n", shellcode_size);
+
+	printf("e_shoff: %lx\n", ehdr->e_shoff);
+	ehdr->e_shoff += PAGE_ROUND(sizeof(shellcode));
+	printf("e_shoff: %lx\n", ehdr->e_shoff);
 
 
-	Elf64_Shdr	*shdr = get_section_by_name(data, ".fini");
-	if (shdr == NULL)
-		return handle_error("No .text section found\n");
 
-	printf("Shellcode entrypoint: %lx\n", codecave_offset);
+	get_phdr_text(data);
 
-	if (codecave_offset + codecave_size > data->_file_size)
-		return handle_error("Codecave out of bounds\n");
-
-	size_t shellcode_size = sizeof(shellcode) - 1;
-	if (codecave_size < shellcode_size)
-		return handle_error("Codecave too small\n");
-
-	uint64_t old_entry = ehdr->e_entry;
-
-	printf("Old entrypoint: %lx\n", old_entry);
-
-
-	memcpy(data->_file_map + codecave_offset, shellcode, shellcode_size);
-	//patch_jump(shellcode, old_entry);
-
-	const uintptr_t page_size = 4096;
-	if (mprotect((void *)((uintptr_t)&ehdr->e_entry & ~(uintptr_t)4095), 4096, PROT_READ | PROT_WRITE) == -1)
-		handle_syscall("mprotect", -1);
-	
-
-	ehdr->e_entry = codecave_offset;
-	phdr->p_filesz += shellcode_size;
-	phdr->p_memsz += shellcode_size;
-	shdr->sh_size += shellcode_size;
-
+	ehdr->e_phoff += PAGE_ROUND(sizeof(shellcode));
 	patch_new_file(data);
+
+
 
 	return (EXIT_SUCCESS);
 }
@@ -142,17 +125,18 @@ static int	check_file(char *filename) {
 
 	int	fd = open(filename, O_RDONLY);
 	if (fd == -1)
-		handle_syscall("open", fd);
+		handle_syscall("open");
 
 	ssize_t	file_size = lseek(fd, 0, SEEK_END);
 	if (file_size == -1)
-		handle_syscall("lseek", fd);
+		handle_syscall("lseek");
 
 	lseek(fd, 0, SEEK_SET);
 
 	void *file_map = mmap(NULL, file_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+	printf("File size: %ld\n", file_size);
 	if (file_map == MAP_FAILED)
-		handle_syscall("mmap", fd);
+		handle_syscall("mmap");
 
 
 	Elf64_Ehdr	*header = (Elf64_Ehdr *)file_map;
@@ -167,6 +151,8 @@ static int	check_file(char *filename) {
 	data_t *data		= get_data();
 	data->_file_map		= file_map;
 	data->_file_size	= file_size;
+
+	close(fd);
 
 	return (EXIT_SUCCESS);
 }

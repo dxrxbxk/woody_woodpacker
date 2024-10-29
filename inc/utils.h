@@ -30,7 +30,7 @@ typedef struct data_s {
 
 int		ft_strlen(char *str);
 int		handle_error(char *msg);
-int		handle_syscall(char *msg, int fd);
+int		handle_syscall(char *msg);
 
 void	print_data(const uint8_t *data, size_t size);
 void	print_payload(payload_t payload);
@@ -39,6 +39,8 @@ void	print_hex(void *data, size_t size);
 
 data_t	*get_data(void);
 void	free_data(void);
+
+void	*ft_memcpy(void *dest, const void *src, size_t n);
 
 typedef struct patch_s{
 	/* offset from payload to pgm entrypoint */
