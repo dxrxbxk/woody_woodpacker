@@ -1,7 +1,8 @@
 BITS 64
     push rdx
     ;; Load Message Into the stack
-    mov rax, 10
+	push rax
+	mov rax, 10
     push rax
     mov rax, ' Message'
     push rax
@@ -17,8 +18,7 @@ BITS 64
     pop rax
     pop rax
     pop rax
+	pop rax
     pop rdx
-
-	mov rax, 0x1050
-	jmp rax
+	jmp -269		;; -263 is the offset to the next instruction
 
