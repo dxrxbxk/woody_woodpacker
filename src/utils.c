@@ -48,6 +48,7 @@ void	free_data(void) {
 		if (data->_file_map)
 			munmap(data->_file_map, data->_file_size);
 		free(data);
+		data = NULL;
 	}
 }
 

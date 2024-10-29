@@ -9,31 +9,23 @@
 // ^ this one works but segfaults
 //
 
-char shellcode[] = "\x52\x50\xb8\x0a\x00\x00\x00\x50\x48\xb8\x20\x4d\x65\x73\x73\x61\x67\x65\x50\x48\xb8\x49\x6e\x6a\x65\x63\x74\x65\x64\x50\xb8\x01\x00\x00\x00\xbf\x01\x00\x00\x00\x48\x89\xe6\xba\x11\x00\x00\x00\x0f\x05\x58\x58\x58\x58\x5a\xe9\xb7\xfe\xff\xff";
-//char mov[] = {0x48, 0xc7, 0xc0, 0x50, 0x10, 0x00, 0x00};
-//char jmp[] = {0xff, 0xe0};
-
-//shellcode = mov + jmp;
-//char shellcode[] = {
-//	// mov
-//	0x48, 0xc7, 0xc0, 0x50, 0x10, 0x00, 0x00,
-//	// jmp
-//	0xff, 0xe0
-//};
 
 
+// injected shellcode
+//char shellcode[] = "\x52\x50\xb8\x0a\x00\x00\x00\x50\x48\xb8\x44\x59\x2e\x2e\x2e\x2e\x00\x00\x50\x48\xb8\x2e\x2e\x2e\x2e\x57\x4f\x4f\x00\x50\xb8\x01\x00\x00\x00\xbf\x01\x00\x00\x00\x48\x89\xe6\xba\x0e\x00\x00\x00\x0f\x05\x58\x58\x58\x58\x5a\xe9\xb7\xfe\xff\xff";
+//
+// woody one with relative jump
+//char shellcode[] = "\x52\x50\xb8\x0a\x00\x00\x00\x50\x48\xb8\x44\x59\x2e\x2e\x2e\x2e\x00\x00\x50\x48\xb8\x2e\x2e\x2e\x2e\x57\x4f\x4f\x00\x50\xb8\x01\x00\x00\x00\xbf\x01\x00\x00\x00\x48\x89\xe6\xba\x11\x00\x00\x00\x0f\x05\x58\x58\x58\x58\x5a\xe9\xb7\xfe\xff\xff";
 
-static void patch_jump(char *code, uintptr_t target_address) {
-    uintptr_t jump_address = (uintptr_t)code + sizeof(shellcode) - 5; // Address of the jmp instruction
-    int32_t offset = target_address - (jump_address + 5); // Calculate offset
+char shellcode[] = "\x52\x50\xb8\x0a\x00\x00\x00\x50\x48\xb8\x44\x59\x2e\x2e\x2e\x2e\x00\x00\x50\x48\xb8\x2e\x2e\x2e\x2e\x57\x4f\x4f\x00\x50\xb8\x01\x00\x00\x00\xbf\x01\x00\x00\x00\x48\x89\xe6\xba\x11\x00\x00\x00\x0f\x05\x58\x58\x58\x58\x5a\xe9\x00\x00\x00\x00";
 
-    // Patch the jump instruction
-    code[sizeof(shellcode) - 1] = (offset & 0xFF);          // Lower byte
-    code[sizeof(shellcode) - 2] = (offset >> 8) & 0xFF;     // 2nd byte
-    code[sizeof(shellcode) - 3] = (offset >> 16) & 0xFF;    // 3rd byte
-    code[sizeof(shellcode) - 4] = (offset >> 24) & 0xFF;    // Higher byte
+void patch_jmp_relative(int64_t offset) {
+															  //
+	shellcode[sizeof(shellcode) - 5] = offset & 0xFF;                       // Premier octet
+	shellcode[sizeof(shellcode) - 4] = (offset >> 8) & 0xFF;                // Deuxième octet
+	shellcode[sizeof(shellcode) - 3] = (offset >> 16) & 0xFF;               // Troisième octet
+	shellcode[sizeof(shellcode) - 2] = (offset >> 24) & 0xFF;               // Quatrième octet
 }
-
 
 static Elf64_Phdr*	parse_program_headers(data_t *data, size_t *codecave_offset, size_t *codecave_size) {
 	
@@ -132,7 +124,6 @@ static int	inject_payload(void) {
 
 	uint64_t old_entry = ehdr->e_entry;
 
-	printf("Old entrypoint: %lx\n", old_entry);
 
 	// increase the size of the .text section
 	
@@ -144,6 +135,26 @@ static int	inject_payload(void) {
 	printf("patching at %lx\n", codecave_offset);
 
 	printf("codecave_offset - old_entry: %li\n", codecave_offset - old_entry);
+	printf("phdr.address = %lx\n", phdr->p_vaddr + phdr->p_filesz);
+	printf("Old entrypoint: %lx\n", old_entry);
+	printf("old_entry - phdr.address + phdr->p_filesz: %li\n", old_entry - (phdr->p_vaddr + phdr->p_filesz));
+
+	int64_t jmp_range = old_entry - (phdr->p_vaddr + phdr->p_filesz); 
+
+	int64_t jmp_addr = phdr->p_vaddr + phdr->p_filesz - 5;
+	printf("jmp_addr: %lx\n", jmp_addr);
+
+	int64_t target_addr = phdr->p_vaddr + phdr->p_filesz - jmp_range;
+
+
+
+	//printf("phdr.address - old_entry: %lx\n", (uintptr_t)phdr->p_vaddr + phdr->p_filesz - old_entry);
+
+
+	print_hex(shellcode, shellcode_size);
+	patch_jmp_relative(jmp_range);
+	printf("-----------------\n");
+	print_hex(shellcode, shellcode_size);
 
 
 	memcpy(data->_file_map + codecave_offset, shellcode, shellcode_size);
@@ -191,6 +202,7 @@ static int	check_file(char *filename) {
 	data->_file_map		= file_map;
 	data->_file_size	= file_size;
 
+	close(fd);
 	return (EXIT_SUCCESS);
 }
 
@@ -201,6 +213,7 @@ int main(int argc, char *argv[]) {
 	  } else if (inject_payload()) {
 		  return (EXIT_FAILURE);
 	  }
+	  free_data();
 	  return (EXIT_SUCCESS);
   } else
 	  return handle_error("Usage: ./woody_woodpacker <filename>\n");

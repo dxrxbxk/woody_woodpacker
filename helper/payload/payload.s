@@ -4,9 +4,9 @@ BITS 64
 	push rax
 	mov rax, 10
     push rax
-    mov rax, ' Message'
+    mov rax, 'DY....'
     push rax
-    mov rax, 'Injected'
+    mov rax, '....WOO'
     push rax
 
     mov rax, 1      ;;  write(
@@ -20,5 +20,5 @@ BITS 64
     pop rax
 	pop rax
     pop rdx
-	jmp -269		;; -263 is the offset to the next instruction
 
+	jmp -269
