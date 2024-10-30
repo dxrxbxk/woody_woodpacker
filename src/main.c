@@ -8,15 +8,22 @@
 //char shellcode[] = "\x52\x50\xb8\x0a\x00\x00\x00\x50\x48\xb8\x44\x59\x2e\x2e\x2e\x2e\x00\x00\x50\x48\xb8\x2e\x2e\x2e\x2e\x57\x4f\x4f\x00\x50\xb8\x01\x00\x00\x00\xbf\x01\x00\x00\x00\x48\x89\xe6\xba\x11\x00\x00\x00\x0f\x05\x58\x58\x58\x58\x5a\xe9\xb7\xfe\xff\xff";
 
 // working and dont push rax first
-char shellcode[]		= "\x52\xb8\x0a\x00\x00\x00\x50\x48\xb8\x44\x59\x2e\x2e\x2e\x2e\x00\x00\x50\x48\xb8\x2e\x2e\x2e\x2e\x57\x4f\x4f\x00\x50\xb8\x01\x00\x00\x00\xbf\x01\x00\x00\x00\x48\x89\xe6\xba\x11\x00\x00\x00\x0f\x05\x58\x58\x58\x5a\xe9\xc6\xff\xff\xff";
+//char shellcode[]		= "\x52\xb8\x0a\x00\x00\x00\x50\x48\xb8\x44\x59\x2e\x2e\x2e\x2e\x00\x00\x50\x48\xb8\x2e\x2e\x2e\x2e\x57\x4f\x4f\x00\x50\xb8\x01\x00\x00\x00\xbf\x01\x00\x00\x00\x48\x89\xe6\xba\x11\x00\x00\x00\x0f\x05\x58\x58\x58\x5a\xe9\xc6\xff\xff\xff";
+
+char shellcode[]		= "\x52\xeb\x0f\x2e\x2e\x2e\x2e\x57\x4f\x4f\x44\x59\x2e\x2e\x2e\x2e\x0a\x00\xb8\x01\x00\x00\x00\xbf\x01\x00\x00\x00\x48\x8d\x35\xe0\xff\xff\xff\xba\x0f\x00\x00\x00\x0f\x05\x5a\xe9\xd0\xff\xff\xff";
 
 size_t shellcode_size	= sizeof(shellcode) - 1;
 
-void patch_jmp_relative(int64_t offset) {
-	shellcode[sizeof(shellcode) - 5] = offset & 0xFF;
-	shellcode[sizeof(shellcode) - 4] = (offset >> 8) & 0xFF;
-	shellcode[sizeof(shellcode) - 3] = (offset >> 16) & 0xFF;
-	shellcode[sizeof(shellcode) - 2] = (offset >> 24) & 0xFF;
+size_t	jmp_offset		= 5;
+
+void patch_jmp_relative(int64_t jmp_value, size_t offset) {
+
+
+	for (size_t i = 4; i > 0; i--) {
+		shellcode[shellcode_size - offset] = jmp_value & 0xFF;
+		jmp_value >>= 8;
+		offset--;
+	}
 }
 
 static int		find_codecave(data_t *data, size_t *codecave_offset, size_t *codecave_size) {
@@ -44,9 +51,14 @@ static int		find_codecave(data_t *data, size_t *codecave_offset, size_t *codecav
 				ehdr->e_entry		= *codecave_offset;
 				int64_t	jmp_range	= (int64_t)old_entry - ((int64_t)phdr[i].p_vaddr + (int64_t)phdr[i].p_filesz);
 
-				//another way to calculate jmp range ? 
+				DEBUG_P("data->file_map: %p\n", (void*)data->_file_map);
 
-				patch_jmp_relative(jmp_range);
+				//another way to calculate jmp range ? 
+				print_hex(shellcode, shellcode_size);
+
+				patch_jmp_relative(jmp_range, jmp_offset - 1);
+				printf("-------------------\n");
+				print_hex(shellcode, shellcode_size);
 
 				PRINT("Found codecave program ehdr.address: %lx, offset: %lx\n", phdr[i].p_vaddr, *codecave_offset);
 				PRINT("Old entry: %lx, new entry: %lx, jmp range: %li\n", old_entry, ehdr->e_entry, jmp_range);
@@ -107,6 +119,16 @@ static int	inject_payload(void) {
 
 	if (find_section(data, codecave_offset))
 		return handle_error("No section found\n");
+
+	// encrypt whole program
+	//uint64_t key = gen_key_64();
+	uint8_t key = 0x42;
+
+	DEBUG_P("Key: %c\n", key);
+
+	//encrypt(data->_file_map, data->_file_size, key);
+
+
 
 	if (ft_memcpy(data->_file_map + codecave_offset, shellcode, shellcode_size) == NULL)
 		return handle_error("Failed to copy shellcode\n");

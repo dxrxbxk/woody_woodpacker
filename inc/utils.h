@@ -50,6 +50,10 @@ data_t	*get_data(void);
 void	free_data(void);
 
 
+uint64_t gen_key_64(void);
+void	encrypt(uint8_t *data, size_t size, uint8_t key);
+
+
 typedef struct patch_s{
 	/* offset from payload to pgm entrypoint */
 	uint64_t				entry_offset;
