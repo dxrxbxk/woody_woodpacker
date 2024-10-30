@@ -1,7 +1,6 @@
 BITS 64
     push rdx
     ;; Load Message Into the stack
-	push rax
 	mov rax, 10
     push rax
     mov rax, 'DY....'
@@ -15,10 +14,9 @@ BITS 64
     mov rdx, 17     ;;  17
     syscall             ;;  );
 
-    pop rax
-    pop rax
+	pop rax
     pop rax
 	pop rax
     pop rdx
 
-	jmp -269
+	jmp 0x0
