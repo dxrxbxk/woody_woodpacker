@@ -15,6 +15,7 @@ int	ft_strlen(char *str) {
 
 int handle_syscall(char *msg) {
 	perror(msg);
+	free_data();
 	exit(EXIT_FAILURE);
 }
 

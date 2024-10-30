@@ -30,8 +30,6 @@ static int		find_codecave(data_t *data, size_t *codecave_offset, size_t *codecav
 			Elf64_Phdr *next		= &phdr[i + 1];
 			size_t end_of_segment	= phdr[i].p_offset + phdr[i].p_filesz;
 
-			DEBUG_P("offset %lx, and next offset %lx\n", phdr[i].p_offset, next->p_offset);
-
 			if (i + 1 < ehdr->e_phnum && next->p_type == PT_LOAD) {
 				*codecave_offset	= end_of_segment;
 				*codecave_size		= next->p_offset - end_of_segment;
@@ -41,7 +39,6 @@ static int		find_codecave(data_t *data, size_t *codecave_offset, size_t *codecav
 				
 
 				int64_t	old_entry	= ehdr->e_entry;
-				DEBUG_P("phdr[i].p_vaddr: %lx, phdr[i].p_filesz: %lx, old_entry: %lx\n", phdr[i].p_vaddr, phdr[i].p_filesz, old_entry);
 				phdr[i].p_filesz	+= shellcode_size;
 				phdr[i].p_memsz		+= shellcode_size;
 				ehdr->e_entry		= *codecave_offset;
@@ -49,11 +46,10 @@ static int		find_codecave(data_t *data, size_t *codecave_offset, size_t *codecav
 
 				//another way to calculate jmp range ? 
 
-				PRINT("Old entry: %lx, new entry: %lx, jmp range: %li\n", old_entry, ehdr->e_entry, jmp_range);
 				patch_jmp_relative(jmp_range);
 
-
 				PRINT("Found codecave program ehdr.address: %lx, offset: %lx\n", phdr[i].p_vaddr, *codecave_offset);
+				PRINT("Old entry: %lx, new entry: %lx, jmp range: %li\n", old_entry, ehdr->e_entry, jmp_range);
 
 				return (EXIT_SUCCESS);
 
@@ -113,18 +109,21 @@ static int	inject_payload(void) {
 		return handle_error("No section found\n");
 
 	if (ft_memcpy(data->_file_map + codecave_offset, shellcode, shellcode_size) == NULL)
-		handle_error("ft_memcpy");
+		return handle_error("Failed to copy shellcode\n");
 
 	//const uintptr_t page_size = 4096;
 	//if (mprotect((void *)((uintptr_t)&ehdr->e_entry & ~(uintptr_t)4095), 4096, PROT_READ | PROT_WRITE) == -1)
 	//	handle_syscall("mprotect", -1);
 
-	patch_new_file(data);
+	if (patch_new_file(data))
+		return handle_error("Failed to patch new file\n");
 
 	return (EXIT_SUCCESS);
 }
 
 static int	check_file(char *filename) {
+
+	//check if file exists
 
 	int	fd = open(filename, O_RDONLY);
 	if (fd == -1)
@@ -139,7 +138,6 @@ static int	check_file(char *filename) {
 	void *file_map = mmap(NULL, file_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
 	if (file_map == MAP_FAILED)
 		handle_syscall("mmap");
-
 
 	Elf64_Ehdr	*header = (Elf64_Ehdr *)file_map;
 
@@ -160,13 +158,11 @@ static int	check_file(char *filename) {
 
 int main(int argc, char *argv[]) {
   if (argc == 2) {
-	  if (check_file(argv[1])) {
-		  return (EXIT_FAILURE);
-	  } else if (inject_payload()) {
-		  return (EXIT_FAILURE);
-	  }
+	  uint64_t exit_status = 0;
+	  exit_status = check_file(argv[1]);
+	  exit_status = inject_payload();
 	  free_data();
-	  return (EXIT_SUCCESS);
+	  return (exit_status);
   } else
 	  return handle_error("Usage: ./woody_woodpacker <filename>\n");
 }
