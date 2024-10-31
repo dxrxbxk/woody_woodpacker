@@ -10,14 +10,20 @@
 // working and dont push rax first
 //char shellcode[]		= "\x52\xb8\x0a\x00\x00\x00\x50\x48\xb8\x44\x59\x2e\x2e\x2e\x2e\x00\x00\x50\x48\xb8\x2e\x2e\x2e\x2e\x57\x4f\x4f\x00\x50\xb8\x01\x00\x00\x00\xbf\x01\x00\x00\x00\x48\x89\xe6\xba\x11\x00\x00\x00\x0f\x05\x58\x58\x58\x5a\xe9\xc6\xff\xff\xff";
 
-char shellcode[]		= "\x52\xeb\x0f\x2e\x2e\x2e\x2e\x57\x4f\x4f\x44\x59\x2e\x2e\x2e\x2e\x0a\x00\xb8\x01\x00\x00\x00\xbf\x01\x00\x00\x00\x48\x8d\x35\xe0\xff\xff\xff\xba\x0f\x00\x00\x00\x0f\x05\x5a\xe9\xd0\xff\xff\xff";
+// new shellcode with .string: db '....WOODY....',0
+//char shellcode[]		= "\x52\xeb\x0f\x2e\x2e\x2e\x2e\x57\x4f\x4f\x44\x59\x2e\x2e\x2e\x2e\x0a\x00\xb8\x01\x00\x00\x00\xbf\x01\x00\x00\x00\x48\x8d\x35\xe0\xff\xff\xff\xba\x0f\x00\x00\x00\x0f\x05\x5a\xe9\xd0\xff\xff\xff";
+
+char shellcode[] = "\x52\x48\x8d\x35\x47\x00\x00\x00\x48\x03\x36\xb9\x00\x10\x00\x00\xb0\x42\x48\x83\xf9\x00\x74\x19\x30\x06\x48\xff\xc6\x48\xff\xc9\xeb\xf0\x2e\x2e\x2e\x2e\x57\x4f\x4f\x44\x59\x2e\x2e\x2e\x2e\x0a\x00\xb8\x01\x00\x00\x00\xbf\x01\x00\x00\x00\x48\x8d\x35\xe0\xff\xff\xff\xba\x0f\x00\x00\x00\x0f\x05\x5a\xe9\xb1\xff\xff\xff\x00\x00\x00\x00";
 
 size_t shellcode_size	= sizeof(shellcode) - 1;
 
-size_t	jmp_offset		= 5;
+size_t	jmp_offset		= 8;
+size_t	addr_offset		= 4;
 
 void patch_jmp_relative(int64_t jmp_value, size_t offset) {
-
+	printf("jmp_value: %lx\n", jmp_value);
+	printf("jmp_value in decimal: %ld\n", jmp_value);
+	printf("offset: %lx\n", offset);
 
 	for (size_t i = 4; i > 0; i--) {
 		shellcode[shellcode_size - offset] = jmp_value & 0xFF;
@@ -26,10 +32,20 @@ void patch_jmp_relative(int64_t jmp_value, size_t offset) {
 	}
 }
 
+void	patch_shellcode(uint64_t value, size_t offset) {
+	for (size_t i = 8; i > 0; i--) {
+		shellcode[shellcode_size - offset] = value & 0xFF;
+		value >>= 8;
+		offset--;
+	}
+}
+
 static int		find_codecave(data_t *data, size_t *codecave_offset, size_t *codecave_size) {
 	
 	Elf64_Ehdr	*ehdr				= (Elf64_Ehdr *)data->_file_map;
 	Elf64_Phdr	*phdr				= (Elf64_Phdr *)(data->_file_map + ehdr->e_phoff);
+
+	PRINT("phdr start offset: %lx\n", ehdr->e_phoff);
 
 	for (size_t i = 0; i < ehdr->e_phnum; i++) {
 		if (phdr[i].p_type == PT_LOAD && phdr[i].p_flags & PF_X) {
@@ -49,15 +65,21 @@ static int		find_codecave(data_t *data, size_t *codecave_offset, size_t *codecav
 				phdr[i].p_filesz	+= shellcode_size;
 				phdr[i].p_memsz		+= shellcode_size;
 				ehdr->e_entry		= *codecave_offset;
-				int64_t	jmp_range	= (int64_t)old_entry - ((int64_t)phdr[i].p_vaddr + (int64_t)phdr[i].p_filesz);
-
+				int64_t	jmp_range	= (int64_t)old_entry - ((int64_t)phdr[i].p_vaddr + (int64_t)phdr[i].p_filesz) + 4;
 				DEBUG_P("data->file_map: %p\n", (void*)data->_file_map);
 
-				//another way to calculate jmp range ? 
-				print_hex(shellcode, shellcode_size);
+				//encrypt from 1000 to 2000
 
-				patch_jmp_relative(jmp_range, jmp_offset - 1);
+
+				//another way to calculate jmp range ? 
+				printf("Before patching : \n");
+				print_hex(shellcode, shellcode_size);
+				patch_jmp_relative(-0x1ac, addr_offset);
+
+				patch_jmp_relative(jmp_range, jmp_offset);
 				printf("-------------------\n");
+
+				printf("After patching : \n");
 				print_hex(shellcode, shellcode_size);
 
 				PRINT("Found codecave program ehdr.address: %lx, offset: %lx\n", phdr[i].p_vaddr, *codecave_offset);
@@ -122,9 +144,6 @@ static int	inject_payload(void) {
 
 	// encrypt whole program
 	//uint64_t key = gen_key_64();
-	uint8_t key = 0x42;
-
-	DEBUG_P("Key: %c\n", key);
 
 	//encrypt(data->_file_map, data->_file_size, key);
 
