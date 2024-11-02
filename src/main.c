@@ -1,53 +1,7 @@
-#include "utils.h"
+#include "woody_woodpacker.h"
 
-// woody one with relative jump
-//char shellcode[] = "\x52\x50\xb8\x0a\x00\x00\x00\x50\x48\xb8\x44\x59\x2e\x2e\x2e\x2e\x00\x00\x50\x48\xb8\x2e\x2e\x2e\x2e\x57\x4f\x4f\x00\x50\xb8\x01\x00\x00\x00\xbf\x01\x00\x00\x00\x48\x89\xe6\xba\x11\x00\x00\x00\x0f\x05\x58\x58\x58\x58\x5a\xe9\xb7\xfe\xff\xff";
-
-
-// working and we push rax first
-//char shellcode[] = "\x52\x50\xb8\x0a\x00\x00\x00\x50\x48\xb8\x44\x59\x2e\x2e\x2e\x2e\x00\x00\x50\x48\xb8\x2e\x2e\x2e\x2e\x57\x4f\x4f\x00\x50\xb8\x01\x00\x00\x00\xbf\x01\x00\x00\x00\x48\x89\xe6\xba\x11\x00\x00\x00\x0f\x05\x58\x58\x58\x58\x5a\xe9\xb7\xfe\xff\xff";
-
-// working and dont push rax first
-//char shellcode[]		= "\x52\xb8\x0a\x00\x00\x00\x50\x48\xb8\x44\x59\x2e\x2e\x2e\x2e\x00\x00\x50\x48\xb8\x2e\x2e\x2e\x2e\x57\x4f\x4f\x00\x50\xb8\x01\x00\x00\x00\xbf\x01\x00\x00\x00\x48\x89\xe6\xba\x11\x00\x00\x00\x0f\x05\x58\x58\x58\x5a\xe9\xc6\xff\xff\xff";
-
-// new shellcode with .string: db '....WOODY....',0
-//char shellcode[]		= "\x52\xeb\x0f\x2e\x2e\x2e\x2e\x57\x4f\x4f\x44\x59\x2e\x2e\x2e\x2e\x0a\x00\xb8\x01\x00\x00\x00\xbf\x01\x00\x00\x00\x48\x8d\x35\xe0\xff\xff\xff\xba\x0f\x00\x00\x00\x0f\x05\x5a\xe9\xd0\xff\xff\xff";
-
-#define PAGE_SIZE 4096
-
-
-char	shellcode[]		= "\x52\x48\x8d\x05\xf8\xff\xff\xff\x48\x2b\x05\x4a\x00\x00\x00\x48\x8b\x0d\x43\x00\x00\x00\x8a\x1d\x45\x00\x00\x00\x48\x83\xf9\x00\x74\x19\x30\x18\x48\xff\xc0\x48\xff\xc9\xeb\xf0\x2e\x2e\x2e\x2e\x57\x4f\x4f\x44\x59\x2e\x2e\x2e\x2e\x0a\x00\xb8\x01\x00\x00\x00\xbf\x01\x00\x00\x00\x48\x8d\x35\xe0\xff\xff\xff\xba\x0f\x00\x00\x00\x0f\x05\x5a\xe9\xa7\xff\xff\xff\x5d\x01\x00\x00\x00\x00\x00\x00\x42";
-size_t	shellcode_size	= sizeof(shellcode) - 1;
-
-
-#define KEY_OFFSET		1
-#define ADDR_OFFSET		9
-#define JMP_OFFSET		13
-
-void modify_shellcode(int64_t jmp_value, size_t offset, size_t size) {
-	DEBUG_P("jmp_value: %lx, offset: %zu, size: %zu\n", jmp_value, offset, size);
-
-
-	for (size_t i = size; i > 0; i--) {
-		shellcode[shellcode_size - offset] = jmp_value & 0xFF;
-		jmp_value >>= 8;
-		offset--;
-	}
-}
-
-void patch_shellcode(int64_t codecave_offset, int8_t key, int32_t jmp_range) {
-#ifdef DEBUG
-	print_hex(shellcode, shellcode_size);
-#endif
-	modify_shellcode(codecave_offset, ADDR_OFFSET, sizeof(codecave_offset));
-	modify_shellcode(key, KEY_OFFSET, sizeof(key));
-	modify_shellcode(jmp_range, JMP_OFFSET, sizeof(jmp_range));
-#ifdef DEBUG
-	printf("----------------------\n");
-	print_hex(shellcode, shellcode_size);
-#endif
-
-}
+char	g_payload[]		= "\x52\x48\x8d\x05\xf8\xff\xff\xff\x48\x2b\x05\x4a\x00\x00\x00\x48\x8b\x0d\x43\x00\x00\x00\x8a\x1d\x45\x00\x00\x00\x48\x83\xf9\x00\x74\x19\x30\x18\x48\xff\xc0\x48\xff\xc9\xeb\xf0\x2e\x2e\x2e\x2e\x57\x4f\x4f\x44\x59\x2e\x2e\x2e\x2e\x0a\x00\xb8\x01\x00\x00\x00\xbf\x01\x00\x00\x00\x48\x8d\x35\xe0\xff\xff\xff\xba\x0f\x00\x00\x00\x0f\x05\x5a\xe9\xa7\xff\xff\xff\x5d\x01\x00\x00\x00\x00\x00\x00\x42";
+size_t	g_payload_size	= sizeof(g_payload) - 1;
 
 static int		find_codecave(data_t *data, size_t *codecave_offset, size_t *codecave_size) {
 	
@@ -67,22 +21,23 @@ static int		find_codecave(data_t *data, size_t *codecave_offset, size_t *codecav
 				*codecave_offset	= end_of_segment;
 				*codecave_size		= next->p_offset - end_of_segment;
 
-				if (*codecave_size < shellcode_size) 
-					return (handle_error("Codecave too small\n"));
-				
+				if (*codecave_size < g_payload_size) 
+					return (ERROR(CODECAVE_SIZE_TOO_SMALL));
 
 				int64_t	old_entry	= ehdr->e_entry;
+
 				phdr[i].p_flags		|= PF_W;
-				phdr[i].p_filesz	+= shellcode_size;
-				phdr[i].p_memsz		+= shellcode_size;
+				phdr[i].p_filesz	+= g_payload_size;
+				phdr[i].p_memsz		+= g_payload_size;
 				ehdr->e_entry		= *codecave_offset;
+
 				int32_t	jmp_range	= (int64_t)old_entry - ((int64_t)phdr[i].p_vaddr + (int64_t)phdr[i].p_filesz) + ADDR_OFFSET;
 				uint8_t	key			= gen_key();
 				uint64_t start		= *codecave_offset - old_entry;
 
 				encrypt(data->_file_map + old_entry, phdr[i].p_filesz, key);
 
-				patch_shellcode(start, key, jmp_range);
+				patch_payload(start, key, jmp_range);
 
 				PRINT("Found codecave program ehdr.address: %lx, offset: %lx\n", phdr[i].p_vaddr, *codecave_offset);
 				PRINT("Old entry: %lx, new entry: %lx, jmp range: %i\n", old_entry, ehdr->e_entry, jmp_range);
@@ -106,12 +61,13 @@ static int		find_section(data_t *data, Elf64_Addr addr) {
 	for (size_t i = 0; i < header->e_shnum; i++) {
 		if (i + 1 < header->e_shnum && addr >= shdr[i].sh_addr && addr < shdr[i + 1].sh_addr) {
 			DEBUG_P("find_section: Found section %s at %lx\n", strtab_p + shdr[i].sh_name, addr);
-			shdr[i].sh_size += shellcode_size;
+			shdr[i].sh_size += g_payload_size;
 			return (EXIT_SUCCESS);
 		}
 	}
 	return (EXIT_FAILURE);
 }
+
 
 static int		patch_new_file(data_t *data) {
 
@@ -119,14 +75,15 @@ static int		patch_new_file(data_t *data) {
 	if (fd == -1)
 		handle_syscall("open");
 
-	if (write(fd, data->_file_map, data->_file_size) == -1)
+	if (write(fd, data->_file_map, data->_file_size) == -1) {
+		close(fd);
 		handle_syscall("write");
+	}
 
 	close(fd);
 
 	return (EXIT_SUCCESS);
 }
-
 
 static int		inject_payload(void) {
 
@@ -137,65 +94,70 @@ static int		inject_payload(void) {
 
 
 	if (find_codecave(data, &codecave_offset, &codecave_size))
-		return handle_error("No codecave found\n");
+		return ERROR(NO_CODECAVE_FOUND);
 
-	PRINT("Codecave size: %zu, offset: %lx, shellcode size: %zu\n", codecave_size, codecave_offset, shellcode_size);
+	PRINT("Codecave size: %zu, offset: %lx, payload size: %zu\n", codecave_size, codecave_offset, g_payload_size);
 
 	if (find_section(data, codecave_offset))
-		return handle_error("No section found\n");
+		return ERROR(NO_SECTION_FOUND);
 
+	if (ft_memcpy(data->_file_map + codecave_offset, g_payload, g_payload_size) == NULL)
+		return ERROR(COPY_FAILED);
 
-	if (ft_memcpy(data->_file_map + codecave_offset, shellcode, shellcode_size) == NULL)
-		return handle_error("Failed to copy shellcode\n");
+	patch_new_file(data);
 
-	if (patch_new_file(data))
-		return handle_error("Failed to patch new file\n");
-
-	return (EXIT_SUCCESS);
+	return (SUCCESS);
 }
 
-static int		check_file(char *filename) {
-
-	//check if file exists
-
+static int		map_file(char *filename) {
 	int	fd = open(filename, O_RDONLY);
 	if (fd == -1)
 		handle_syscall("open");
 
 	ssize_t	file_size = lseek(fd, 0, SEEK_END);
-	if (file_size == -1)
+	if (file_size == -1) {
+		close(fd);
 		handle_syscall("lseek");
+	}
 
 	lseek(fd, 0, SEEK_SET);
 
 	void *file_map = mmap(NULL, file_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
-	if (file_map == MAP_FAILED)
+	if (file_map == MAP_FAILED) {
+		close(fd);
 		handle_syscall("mmap");
-
-	Elf64_Ehdr	*header = (Elf64_Ehdr *)file_map;
-
-	if (ft_memcmp(header->e_ident, "\x7f""ELF", 4) != 0)
-		return handle_error("Not an ELF file\n");
-	else if (header->e_ident[4] == ELF_32)
-		return handle_error("File architecture not suported. x86_64 only\n");
-	else if (header->e_ident[4] != ELF_64)
-		return handle_error("Unknown ELF format\n");
+	}
 
 	data_t *data		= get_data();
 	data->_file_map		= file_map;
 	data->_file_size	= file_size;
 
 	close(fd);
+
 	return (EXIT_SUCCESS);
+}
+
+static int		check_file(void) {
+	data_t		*data = get_data();
+
+	Elf64_Ehdr	*header = (Elf64_Ehdr *)data->_file_map;
+
+	if (ft_memcmp(header->e_ident, "\x7f""ELF", 4) != 0)
+		return ERROR(NOT_ELF_FILE);
+	else if (header->e_ident[4] != ELF_64)
+		return ERROR(NOT_X86_64);
+
+	return (SUCCESS);
 }
 
 int main(int argc, char *argv[]) {
   if (argc == 2) {
 	  int64_t exit_status = 0;
-	  exit_status = check_file(argv[1]);
+	  exit_status = map_file(argv[1]);
+	  exit_status = check_file();
 	  exit_status = inject_payload();
 	  free_data();
 	  return (exit_status);
   } else
-	  return handle_error("Usage: ./woody_woodpacker <filename>\n");
+	  return ERROR(BAD_ARGS);
 }

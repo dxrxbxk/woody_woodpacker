@@ -1,5 +1,5 @@
-#ifndef UTILS_H
-#define UTILS_H
+#ifndef WOODY_WOODPACKER_H
+#define WOODY_WOODPACKER_H
 
 #include <stddef.h>
 #include <bits/stdint-uintn.h>
@@ -17,6 +17,10 @@
 #define ELF_64 2
 #define PT_LOAD 1
 
+#define KEY_OFFSET		1
+#define ADDR_OFFSET		9
+#define JMP_OFFSET		13
+
 #ifdef VERBOSE
 # define PRINT(...) printf(__VA_ARGS__)
 #else
@@ -31,17 +35,19 @@
 
 #define ERROR(x) handle_error(x)
 
+extern	char		g_payload[];
+extern	size_t		g_payload_size;
+
 typedef struct data_s {
 	uint8_t					*_file_map;
 	size_t					_file_size;
 } data_t;
 
 void		*ft_memcpy(void *dest, const void *src, size_t n);
-void		*ft_memset(void *s, int c, size_t n);
 int			ft_memcmp(const void *s1, const void *s2, size_t n);
 
 int			ft_strlen(char *str);
-int			handle_error(char *msg);
+int			handle_error(int error_code);
 int			handle_syscall(char *msg);
 
 void		print_hex(void *data, size_t size);
@@ -49,17 +55,24 @@ void		print_hex(void *data, size_t size);
 data_t		*get_data(void);
 void		free_data(void);
 
-
-uint64_t	gen_key_64(void);
 uint8_t		gen_key(void);
 void		encrypt(uint8_t *data, size_t size, uint8_t key);
 
+void		modify_payload(int64_t jmp_value, size_t offset, size_t size);
+void		patch_payload(int64_t codecave_diff, int8_t key, int32_t jmp_range);
 
-typedef struct patch_s{
-	uint32_t				entry_addr;
-	uint64_t				phdr_addr;
-	uint8_t					key;
-} patch_t;
+enum e_error_codes {
+	SUCCESS = 0,
+	FAILURE,
+	BAD_ARGS,
+	NOT_ELF_FILE,
+	NOT_X86_64,
+	CODECAVE_SIZE_TOO_SMALL,
+	NO_CODECAVE_FOUND,
+	NO_SECTION_FOUND,
+	COPY_FAILED,
+	ERROR_CODES_SIZE
+};
 
 
 #endif
