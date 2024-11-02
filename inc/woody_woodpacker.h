@@ -37,6 +37,7 @@
 
 extern	char		g_payload[];
 extern	size_t		g_payload_size;
+extern	size_t		g_payload_offset;
 
 typedef struct data_s {
 	uint8_t					*_file_map;

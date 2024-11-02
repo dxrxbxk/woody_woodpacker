@@ -1,22 +1,40 @@
 BITS 64
-    push rdx
-    ;; Load Message Into the stack
-	mov rax, 10
-    push rax
-    mov rax, 'DY....'
-    push rax
-    mov rax, '....WOO'
-    push rax
 
-    mov rax, 1      ;;  write(
-    mov rdi, 1      ;;  STDOUT_FILENO,
-    mov rsi, rsp    ;;  "Injected Message\n",
-    mov rdx, 17     ;;  17
-    syscall             ;;  );
+_payload:
+	push rdx
 
-	pop rax
-    pop rax
-	pop rax
-    pop rdx
+	lea rax, [rel _payload]
+	sub rax, [rel offset]
+	mov rcx, [rel offset]
+
+	mov bl, [rel key]
+
+.loop:
+	cmp rcx, 0
+	je .print
+
+	xor byte [rax], bl
+	inc rax
+	dec rcx
+	jmp .loop
+
+.string:
+	db "....WOODY....", 0x0a, 0
+
+.print:
+	mov rax, 1
+	mov rdi, 1
+	lea rsi, [rel .string]
+	mov rdx, 15
+
+	syscall
+
+	pop rdx
 
 	jmp 0x0
+
+offset:
+	dq 0x0
+
+key:
+	db 0x42

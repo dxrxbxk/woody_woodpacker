@@ -2,6 +2,7 @@
 
 char	g_payload[]		= "\x52\x48\x8d\x05\xf8\xff\xff\xff\x48\x2b\x05\x4a\x00\x00\x00\x48\x8b\x0d\x43\x00\x00\x00\x8a\x1d\x45\x00\x00\x00\x48\x83\xf9\x00\x74\x19\x30\x18\x48\xff\xc0\x48\xff\xc9\xeb\xf0\x2e\x2e\x2e\x2e\x57\x4f\x4f\x44\x59\x2e\x2e\x2e\x2e\x0a\x00\xb8\x01\x00\x00\x00\xbf\x01\x00\x00\x00\x48\x8d\x35\xe0\xff\xff\xff\xba\x0f\x00\x00\x00\x0f\x05\x5a\xe9\xa7\xff\xff\xff\x5d\x01\x00\x00\x00\x00\x00\x00\x42";
 size_t	g_payload_size	= sizeof(g_payload) - 1;
+int64_t exit_status		= EXIT_SUCCESS;
 
 static int		find_codecave(data_t *data, size_t *codecave_offset, size_t *codecave_size) {
 	
@@ -34,6 +35,8 @@ static int		find_codecave(data_t *data, size_t *codecave_offset, size_t *codecav
 				int32_t	jmp_range	= (int64_t)old_entry - ((int64_t)phdr[i].p_vaddr + (int64_t)phdr[i].p_filesz) + ADDR_OFFSET;
 				uint8_t	key			= gen_key();
 				uint64_t start		= *codecave_offset - old_entry;
+
+				PRINT("Old entry: %lx, phdr[i].p_vaddr: %lx, phdr[i].p_filesz: %lx\n", old_entry, phdr[i].p_vaddr, phdr[i].p_filesz);
 
 				encrypt(data->_file_map + old_entry, phdr[i].p_filesz, key);
 
@@ -152,10 +155,12 @@ static int		check_file(void) {
 
 int main(int argc, char *argv[]) {
   if (argc == 2) {
-	  int64_t exit_status = 0;
-	  exit_status = map_file(argv[1]);
-	  exit_status = check_file();
-	  exit_status = inject_payload();
+	  if ((exit_status = map_file(argv[1])) != EXIT_SUCCESS)
+		  return (exit_status);
+	  if ((exit_status = check_file()) != EXIT_SUCCESS)
+		  return (exit_status);
+	  if ((exit_status = inject_payload()) != EXIT_SUCCESS)
+		  return (exit_status);
 	  free_data();
 	  return (exit_status);
   } else
