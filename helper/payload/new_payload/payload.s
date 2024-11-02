@@ -1,13 +1,17 @@
 BITS 64
 
 _payload:
+	db 0x66
 	push rdx
 
-
 .decrypt:
-	lea rsi, [rel addr_offset]
-	add rsi, [rsi]
-	mov rcx, 0x1000
+	
+	call get_current_addr
+get_current_addr:
+	lea rsi, [rel _payload]
+	add rsi, 1
+
+	mov rcx, 0x1
 	mov al, 0x42
 
 .loop:
@@ -32,6 +36,13 @@ _payload:
 
 	pop rdx
 
-	jmp	0x0
+	; jmp 0x0
+	call exit
 
-addr_offset: dd 0x0
+exit:
+	mov rax, 60
+	xor rdi, rdi
+	syscall
+
+
+addr_offset: dd 0x9

@@ -2,31 +2,12 @@ BITS 64
 
 _payload:
 	push rdx
-	push rax
-	push rcx
-	push rbx
-	push rsi
-	push rdi
-	push rbp
-	push r8
-	push r9
-	push r10
-	push r11
-	push r12
-
-
-	mov rax, 0xa				; syscall mprotect
-	lea rdi, [rel _payload]
-	sub rdi, 0x15d
-	mov rsi, 0x1000
-	mov rdx, 0x7				; PROT_READ | PROT_WRITE | PROT_EXEC
-	syscall
 
 	lea rax, [rel _payload]
-	sub rax, 0x15d
-	mov rcx, 0x15d
+	sub rax, [rel offset]
+	mov rcx, [rel offset]
 
-	mov bl, 0x42
+	mov bl, [rel key]
 
 .loop:
 	cmp rcx, 0
@@ -48,18 +29,12 @@ _payload:
 
 	syscall
 
-	pop r12
-	pop r11
-	pop r10
-	pop r9
-	pop r8
-	pop rbp
-	pop rdi
-	pop rsi
-	pop rbx
-	pop rcx
-	pop rax
 	pop rdx
 
-
 	jmp 0x0
+
+offset:
+	dq 0x0
+
+key:
+	db 0x42

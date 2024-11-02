@@ -123,11 +123,11 @@ override CXX := $(shell which clang)
 override STD := -std=c99 -m64
 
 # compiler optimization
-override OPT := -O3
+override OPT := -O3 -g -gdwarf-4
 #--g3 -gdwarf-4
 
 # compiler flags
-override CXXFLAGS := -Wall -Wextra -Werror -Wpedantic -Wno-unused -Wno-unused-variable -Wno-unused-parameter -g -gdwarf-4
+override CXXFLAGS := -Wall -Wextra -Werror -Wpedantic -Wno-unused -Wno-unused-variable -Wno-unused-parameter
 
 # dependency flags
 override DEPFLAGS = -MT $@ -MMD -MP -MF $(DEPDIR)/$*.d
@@ -138,7 +138,7 @@ override CMPFLAG = -MJ $(JSNDIR)/$*.json
 # all include subdirs with -I prefix
 override INCLUDES := $(addprefix -I, $(HDRDIR))
 
-DEF ?= VERBOSE DEBUG_PRINT
+DEF ?= VERBOSE DEBUG
 
 override DEFINES := $(addprefix -D, $(DEF))
 
