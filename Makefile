@@ -81,6 +81,9 @@ override CMDDB := compile_commands.json
 # get all source files
 override SRC := $(shell find $(SRCDIR) -type f -name "*.c")
 
+# get all payload files
+override PAYLOAD_SRC := $(SRCDIR)/payload.s
+
 # get all header files
 override HDR := $(shell find $(INCDIR) -type f -name "*.h")
 
@@ -95,11 +98,15 @@ override DEP := $(patsubst $(OBJDIR)/%.o,   $(DEPDIR)/%.d,    $(OBJ))
 
 override JSN := $(patsubst $(SRCDIR)/%.c,   $(JSNDIR)/%.json, $(SRC))
 
+# pattern for payload files in asm
+override PAYLOAD_OBJ := $(patsubst $(SRCDIR)/%.s, $(OBJDIR)/%.o, $(PAYLOAD_SRC))
+
 
 override HIR := $(sort $(dir $(SRC)))
 override OBJHIR := $(HIR:$(SRCDIR)/%=$(OBJDIR)/%)
 override DEPHIR := $(HIR:$(SRCDIR)/%=$(DEPDIR)/%)
 override JSNHIR := $(HIR:$(SRCDIR)/%=$(JSNDIR)/%)
+
 
 
 # -- C O M P I L E R  S E T T I N G S -----------------------------------------
@@ -123,11 +130,11 @@ override CXX := $(shell which clang)
 override STD := -std=c99 -m64
 
 # compiler optimization
-override OPT := -O3 -g -gdwarf-4
+override OPT := -O3
 #--g3 -gdwarf-4
 
 # compiler flags
-override CXXFLAGS := -Wall -Wextra -Werror -Wpedantic -Wno-unused -Wno-unused-variable -Wno-unused-parameter
+override CXXFLAGS := -Wall -Wextra -Werror -Wpedantic -Wno-unused -Wno-unused-variable -Wno-unused-parameter -g -gdwarf-4
 
 # dependency flags
 override DEPFLAGS = -MT $@ -MMD -MP -MF $(DEPDIR)/$*.d
@@ -138,19 +145,25 @@ override CMPFLAG = -MJ $(JSNDIR)/$*.json
 # all include subdirs with -I prefix
 override INCLUDES := $(addprefix -I, $(HDRDIR))
 
-DEF ?= VERBOSE DEBUG
+DEF ?=
 
 override DEFINES := $(addprefix -D, $(DEF))
 
 override LIBS := -lc
 
+
+override PAYLOAD = `hexdump -v -e '"\\\x" 1/1 "%02x"' $(OBJDIR)/payload.o`
+
+
+
 # -- P H O N Y  T A R G E T S -------------------------------------------------
 
-.PHONY: all clean fclean re obj
+.PHONY: all clean fclean re obj logger leaks
+
 
 # -- M A I N  T A R G E T S ---------------------------------------------------
 
-all: $(NAME) $(CMDDB) 
+all: payload $(NAME) $(CMDDB) 
 
 # -- E X E C U T A B L E  T A R G E T -------------------------------------------
 
@@ -162,6 +175,13 @@ $(NAME): $(OBJ)
 # -- C O M P I L A T I O N ------------------------------------------------------
 
 -include $(DEP)
+
+payload: $(PAYLOAD_OBJ)
+
+$(OBJDIR)/payload.o: $(SRCDIR)/payload.s Makefile
+	@mkdir -p $(OBJDIR)  # Crée le dossier si besoin
+	@echo "PAYLOAD -> \x1b[33m"$(PAYLOAD)"\x1b[0m"
+	nasm -f bin $< -o $@
 
 
 $(OBJDIR)/%.o : $(SRCDIR)/%.c Makefile | $(OBJHIR) $(DEPHIR) $(JSNHIR)
