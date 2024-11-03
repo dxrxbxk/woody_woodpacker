@@ -1,7 +1,0 @@
-objcopy -O binary --only-section=.text woody_test woody_test.bin
-
-hexdump -v -e '"\\x" 1/1 "%02x"' woody_text.bin
-
-nasm -f elf64 -o print.o print.s && ld -o print print.o
-
-nasm -f bin -o payload print.s
