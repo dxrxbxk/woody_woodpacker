@@ -55,6 +55,7 @@ data_t*	get_data(void) {
 
 		data->_file_map = NULL;
 		data->_file_size = 0;
+		data->_oentry_offset = 0;
 
 	}
 

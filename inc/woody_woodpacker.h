@@ -17,10 +17,6 @@
 #define ELF_64 2
 #define PT_LOAD 1
 
-#define KEY_OFFSET		1
-#define ADDR_OFFSET		9
-#define JMP_OFFSET		13
-
 #ifdef VERBOSE
 # define PRINT(...) printf(__VA_ARGS__)
 #else
@@ -35,6 +31,10 @@
 
 #define ERROR(x) handle_error(x)
 
+#define KEY_OFFSET		8
+#define ADDR_OFFSET		16
+#define JMP_OFFSET		20
+
 extern	char		g_payload[];
 extern	size_t		g_payload_size;
 extern	size_t		g_payload_offset;
@@ -42,6 +42,7 @@ extern	size_t		g_payload_offset;
 typedef struct data_s {
 	uint8_t					*_file_map;
 	size_t					_file_size;
+	Elf64_Addr				_oentry_offset;
 } data_t;
 
 void		*ft_memcpy(void *dest, const void *src, size_t n);
@@ -57,10 +58,11 @@ data_t		*get_data(void);
 void		free_data(void);
 
 uint8_t		gen_key(void);
-void		encrypt(uint8_t *data, size_t size, uint8_t key);
+int64_t		gen_key_64(void);
+void		encrypt(uint8_t *data, size_t size, uint64_t key);
 
 void		modify_payload(int64_t jmp_value, size_t offset, size_t size);
-void		patch_payload(int64_t codecave_diff, int8_t key, int32_t jmp_range);
+void		patch_payload(int64_t codecave_diff, int64_t key, int32_t jmp_range);
 
 enum e_error_codes {
 	SUCCESS = 0,
@@ -74,6 +76,5 @@ enum e_error_codes {
 	COPY_FAILED,
 	ERROR_CODES_SIZE
 };
-
 
 #endif

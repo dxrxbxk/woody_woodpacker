@@ -1,7 +1,7 @@
 #include "woody_woodpacker.h"
 
 void	modify_payload(int64_t jmp_value, size_t offset, size_t size) {
-	DEBUG_P("jmp_value: %lx, offset: %zu, size: %zu\n", jmp_value, offset, size);
+	DEBUG_P("jmp_value: %lx, %ld, offset: %ld, size: %ld\n", jmp_value, jmp_value, offset, size);
 
 	for (size_t i = size; i > 0; i--) {
 		g_payload[g_payload_size - offset] = jmp_value & 0xFF;
@@ -10,7 +10,7 @@ void	modify_payload(int64_t jmp_value, size_t offset, size_t size) {
 	}
 }
 
-void	patch_payload(int64_t codecave_diff, int8_t key, int32_t jmp_range) {
+void	patch_payload(int64_t codecave_diff, int64_t key, int32_t jmp_range) {
 #ifdef DEBUG
 	print_hex(g_payload, g_payload_size);
 #endif
@@ -37,8 +37,21 @@ uint8_t	gen_key(void) {
 	return key;
 }
 
-void	encrypt(uint8_t *data, size_t size, uint8_t key) {
+int64_t	gen_key_64(void) {
+	int	fd = open("/dev/urandom", O_RDONLY);
+	if (fd == -1)
+		handle_syscall("open");
+
+	int64_t key;
+	if (read(fd, &key, sizeof(int64_t)) == -1)
+		handle_syscall("read");
+
+	close(fd);
+	return key;
+}
+
+void	encrypt(uint8_t *data, size_t size, uint64_t key) {
     for (size_t i = 0; i < size; i++) {
-        data[i] ^= key;
+        data[i] ^= (key >> (8 * (i % 8))) & 0xFF;
     }
 }
