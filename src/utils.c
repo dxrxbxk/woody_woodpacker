@@ -24,6 +24,27 @@ int	ft_strlen(char *str) {
 	return (i);
 }
 
+//little endian
+void	ft_puthex(uint64_t n) {
+	char *hex = "0123456789abcdef";
+	char buf[16];
+	int i = 0;
+
+	while (n) {
+		buf[i++] = hex[n & 0xf];
+		n >>= 4;
+	}
+	while (i < 16) {
+		buf[i++] = '0';
+	}
+	while (i) {
+		write(1, &buf[--i], 1);
+	}
+	write(1, "\n", 1);
+}
+
+
+
 void	print_hex(void *data, size_t size) {
 	for (size_t i = 0; i < size; i++) {
 		printf("%02x", ((unsigned char *)data)[i]);
@@ -40,7 +61,7 @@ int	handle_syscall(char *msg) {
 	exit(EXIT_FAILURE);
 }
 
-int	handle_error(int code) {
+int	handle_error(int code) {	
 	write(2, error_strings(code), ft_strlen((char *)error_strings(code)));
 	return (code);
 }

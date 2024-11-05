@@ -53,6 +53,7 @@ int			handle_error(int error_code);
 int			handle_syscall(char *msg);
 
 void		print_hex(void *data, size_t size);
+void	ft_puthex(uint64_t n);
 
 data_t		*get_data(void);
 void		free_data(void);
