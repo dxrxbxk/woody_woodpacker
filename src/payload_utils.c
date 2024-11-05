@@ -1,11 +1,11 @@
 #include "woody_woodpacker.h"
 
-void	modify_payload(int64_t jmp_value, size_t offset, size_t size) {
-	DEBUG_P("jmp_value: %lx, %ld, offset: %ld, size: %ld\n", jmp_value, jmp_value, offset, size);
+void	modify_payload(int64_t value, size_t offset, size_t size) {
+	DEBUG_P("value: %lx, %ld, offset: %ld, size: %ld\n", value, value, offset, size);
 
 	for (size_t i = size; i > 0; i--) {
-		g_payload[g_payload_size - offset] = jmp_value & 0xFF;
-		jmp_value >>= 8;
+		g_payload[g_payload_size - offset] = value & 0xFF;
+		value >>= 8;
 		offset--;
 	}
 }

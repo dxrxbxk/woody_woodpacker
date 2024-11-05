@@ -17,25 +17,14 @@
 # use one shell for all commands
 .ONESHELL:
 
-# delete intermediate files on error
-#.DELETE_ON_ERROR:
-
-# silent mode
-#.SILENT:
-
 # set shell program
-override SHELL := $(shell which zsh)
+override SHELL := $(shell which sh)
 
 # set shell flags
-.SHELLFLAGS := -d -f -c -e -o pipefail -u
+.SHELLFLAGS := -c
 
 # set make flags
 override MAKEFLAGS += --warn-undefined-variables --no-builtin-rules
-
-# -- O P E R A T I N G  S Y S T E M -------------------------------------------
-
-override THREAD    := $(shell nproc)
-
 
 # -- D I R E C T O R I E S ----------------------------------------------------
 
@@ -70,9 +59,6 @@ override PROJECT := woody_woodpacker
 # main executable
 override NAME := $(PROJECT)
 
-# hook script
-override HOOK := $(ROOT)/.git/hooks/pre-commit
-
 # compile command database
 override CMDDB := compile_commands.json
 
@@ -102,22 +88,11 @@ override DEPHIR := $(HIR:$(SRCDIR)/%=$(DEPDIR)/%)
 override JSNHIR := $(HIR:$(SRCDIR)/%=$(JSNDIR)/%)
 
 
+
 # -- C O M P I L E R  S E T T I N G S -----------------------------------------
 
-# make directory if not exists
-override MKDIR := mkdir -pv
-
-# remove recursively force
-override RM := rm -rfv
-
-# leaks detection program
-override VALGRIND := $(shell which valgrind)
-
-# valgrind flags
-override VFLAGS := valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --track-fds=yes
-
 # compiler
-override CXX := $(shell which clang)
+override CC := $(shell which clang)
 
 # compiler standard
 override STD := -std=c99 -m64
@@ -127,7 +102,8 @@ override OPT := -O3 -g -gdwarf-4
 #--g3 -gdwarf-4
 
 # compiler flags
-override CXXFLAGS := -Wall -Wextra -Werror -Wpedantic -Wno-unused -Wno-unused-variable -Wno-unused-parameter
+override CFLAGS := -Wall -Wextra -Werror -Wpedantic \
+					 -Wno-unused -Wno-unused-variable -Wno-unused-parameter
 
 # dependency flags
 override DEPFLAGS = -MT $@ -MMD -MP -MF $(DEPDIR)/$*.d
@@ -142,52 +118,35 @@ DEF ?= VERBOSE DEBUG
 
 override DEFINES := $(addprefix -D, $(DEF))
 
-override LIBS := -lc
 
-# -- P H O N Y  T A R G E T S -------------------------------------------------
-
-.PHONY: all clean fclean re obj
 
 # -- M A I N  T A R G E T S ---------------------------------------------------
 
-all: $(NAME) $(CMDDB) 
-
-# -- E X E C U T A B L E  T A R G E T -------------------------------------------
+all: $(NAME) $(CMDDB)
 
 $(NAME): $(OBJ)
-	@echo "  linking -> \x1b[34m"$@"\x1b[0m"
-	@$(CXX) $(LIBS) $^ -o $@
-
-
-# -- C O M P I L A T I O N ------------------------------------------------------
+	@echo "  linking -> \033[34m"$@"\033[0m"
+	@$(CC) $^ -o $@
 
 -include $(DEP)
-
-
 $(OBJDIR)/%.o : $(SRCDIR)/%.c Makefile | $(OBJHIR) $(DEPHIR) $(JSNHIR)
-	@echo "compiling -> \x1b[33m"$(<F)"\x1b[0m"
-	@$(CXX) $(STD) $(OPT) $(CXXFLAGS) $(DEFINES) $(CMPFLAG) $(DEPFLAGS) $(INCLUDES) -c $< -o $@
+	@echo "compiling -> \033[33m"$(<F)"\033[0m"
+	@$(CC) $(STD) $(OPT) $(CFLAGS) $(DEFINES) $(CMPFLAG) $(DEPFLAGS) $(INCLUDES) -c $< -o $@
 
 $(CMDDB) : $(JSN)
 	@echo "[\n"$$(cat $(JSN) | sed '$$s/,\s*$$//')"\n]" | jq > $@
 
-
-# -- D I R E C T O R I E S  C R E A T I O N -------------------------------------
-
 $(OBJHIR) $(DEPHIR) $(JSNHIR):
-	@$(MKDIR) $@
-
-# -- C L E A N I N G ------------------------------------------------------------
+	@mkdir -p $@
 
 clean:
-	@$(RM) $(BLDDIR) $(CMDDB)
-
+	@rm -rvf $(BLDDIR) $(CMDDB)
 
 fclean: clean
-	@$(RM) $(NAME)
-	$(RM) woody
-
-
-# -- R E C O M P I L E --------------------------------------------------------
+	@rm -vf $(NAME) woody
 
 re: fclean all
+
+# -- P H O N Y  T A R G E T S -------------------------------------------------
+
+.PHONY: all clean fclean re
