@@ -1,3 +1,7 @@
 *.o
 *.d
 .cache
+woody
+woody_woodpacker
+build
+*.json
