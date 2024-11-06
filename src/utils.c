@@ -37,11 +37,12 @@ void	print_hex(void *data, size_t size) {
 int	handle_syscall(char *msg) {
 	perror(msg);
 	free_data();
-	exit(EXIT_FAILURE);
+	exit(FAILURE);
 }
 
 int	handle_error(int code) {	
 	write(2, error_strings(code), ft_strlen((char *)error_strings(code)));
+	g_exit_status = code;
 	return (code);
 }
 

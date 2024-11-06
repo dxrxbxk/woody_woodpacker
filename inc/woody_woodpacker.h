@@ -1,6 +1,7 @@
 #ifndef WOODY_WOODPACKER_H
 #define WOODY_WOODPACKER_H
 
+#include <bits/stdint-intn.h>
 #include <stddef.h>
 #include <bits/stdint-uintn.h>
 #include <stdio.h>
@@ -16,6 +17,7 @@
 #define ELF_32 1
 #define ELF_64 2
 #define PT_LOAD 1
+#define ELF_HEADER_SIZE 64
 
 #ifdef VERBOSE
 # define PRINT(...) printf(__VA_ARGS__)
@@ -35,9 +37,10 @@
 #define ADDR_OFFSET		16
 #define JMP_OFFSET		20
 
-extern	char		g_payload[];
-extern	size_t		g_payload_size;
-extern	size_t		g_payload_offset;
+extern char		g_payload[];
+extern size_t	g_payload_size;
+
+extern int64_t	g_exit_status;
 
 typedef struct data_s {
 	uint8_t					*_file_map;

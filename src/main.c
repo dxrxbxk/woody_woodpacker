@@ -17,6 +17,8 @@ static int	find_codecave(data_t *data, size_t *codecave_offset, size_t *codecave
 			*codecave_offset	= phdr[i].p_offset + phdr[i].p_filesz;
 			*codecave_size		= phdr[i].p_offset + PAGE_SIZE - *codecave_offset;
 
+			PRINT("phdr[i].p_offset: %lx, phdr[i].p_filesz: %lx, codecave_offset: %lx, codecave_size: %lx\n", phdr[i].p_offset, phdr[i].p_filesz, *codecave_offset, *codecave_size);
+
 			if (*codecave_size < g_payload_size) 
 				return (ERROR(CODECAVE_SIZE_TOO_SMALL));
 
@@ -39,6 +41,7 @@ static int	find_codecave(data_t *data, size_t *codecave_offset, size_t *codecave
 
 			patch_payload(start, key, jmp_range);
 
+
 			PRINT("Found codecave program ehdr.address: %lx, offset: %lx\n", phdr[i].p_vaddr, *codecave_offset);
 			PRINT("Old entry: %lx, new entry: %lx, jmp range: %i\n", data->_oentry_offset, ehdr->e_entry, jmp_range);
 
@@ -60,13 +63,35 @@ static int	find_section_by_name(data_t *data, char *name) {
 		if (ft_memcmp(strtab_p + shdr[i].sh_name, name, ft_strlen(name)) == 0) {
 			DEBUG_P("find_section_by_name: Found section %s at %lx\n", name, shdr[i].sh_addr);
 			data->_oentry_offset = shdr[i].sh_offset;
-			shdr[i].sh_size += g_payload_size;
 			return (SUCCESS);
 		}
 	}
 	return (FAILURE);
 }
 
+static int	update_section_size(data_t *data, size_t offset) {
+	Elf64_Ehdr	*header = (Elf64_Ehdr *)data->_file_map;
+	Elf64_Shdr	*shdr = (Elf64_Shdr *)(data->_file_map + header->e_shoff);
+	Elf64_Shdr	*strtab = &shdr[header->e_shstrndx];
+	char	*strtab_p = (char *)data->_file_map + strtab->sh_offset;
+
+	printf("update_section_size: offset: %lx\n", offset);
+
+	for (size_t i = 0; i < header->e_shnum; i++) {
+		if (offset >= shdr[i].sh_offset) {
+			if (i + 1 < header->e_shnum && offset < shdr[i + 1].sh_offset) {
+				shdr[i].sh_size += g_payload_size;
+				DEBUG_P("update_section_size: Found section %s at %lx\n", strtab_p + shdr[i].sh_name, shdr[i].sh_addr);
+				return (SUCCESS);
+			} else if (i + 1 == header->e_shnum) {
+				shdr[i].sh_size += g_payload_size;
+				DEBUG_P("update_section_size: Found section %s at %lx\n", strtab_p + shdr[i].sh_name, shdr[i].sh_addr);
+				return (SUCCESS);
+			}
+		}
+	}
+	return (FAILURE);
+}
 
 static int	patch_new_file(data_t *data) {
 
@@ -99,6 +124,9 @@ static int	inject_payload(void) {
 	if (find_codecave(data, &codecave_offset, &codecave_size))
 		return ERROR(NO_CODECAVE_FOUND);
 
+	if (update_section_size(data, codecave_offset))
+		return ERROR(NO_SECTION_FOUND);
+
 	PRINT("codecave size: %zu, offset: %lx, payload size: %zu\n", codecave_size, codecave_offset, g_payload_size);
 
 	if (ft_memcpy(data->_file_map + codecave_offset, g_payload, g_payload_size) == NULL)
@@ -109,10 +137,32 @@ static int	inject_payload(void) {
 	return (SUCCESS);
 }
 
+static int	check_file(int fd) {
+	char	ehdr[5];
+
+	if (read(fd, ehdr, 5) == -1) {
+		close(fd);
+		handle_syscall("read");
+	}
+
+	if (ft_memcmp(ehdr, "\x7f""ELF", 4) != 0) {
+		return ERROR(NOT_ELF_FILE);
+	} else if (ft_memcmp(ehdr + 4, "\x02", 1) != 0) {
+		return ERROR(NOT_X86_64);
+	}
+
+	return (SUCCESS);
+}
+
 static int	map_file(char *filename) {
 	int	fd = open(filename, O_RDONLY);
 	if (fd == -1)
 		handle_syscall("open");
+
+	if (check_file(fd)) {
+		close(fd);
+		return (FAILURE);
+	}
 
 	ssize_t	file_size = lseek(fd, 0, SEEK_END);
 	if (file_size == -1) {
@@ -137,19 +187,6 @@ static int	map_file(char *filename) {
 	return (SUCCESS);
 }
 
-static int	check_file(void) {
-	data_t	*data = get_data();
-
-	Elf64_Ehdr	*header = (Elf64_Ehdr *)data->_file_map;
-
-	if (ft_memcmp(header->e_ident, "\x7f""ELF", 4) != 0)
-		return ERROR(NOT_ELF_FILE);
-	else if (header->e_ident[4] != ELF_64)
-		return ERROR(NOT_X86_64);
-
-	return (SUCCESS);
-}
-
 static int handle_status(int status) {
     if (status != SUCCESS) {
         free_data();
@@ -160,13 +197,12 @@ static int handle_status(int status) {
 
 int main(int argc, char *argv[]) {
 	if (argc == 2) {
-		if ((g_exit_status = handle_status(map_file(argv[1]))) != SUCCESS ||
-			(g_exit_status = handle_status(check_file())) != SUCCESS ||
-			(g_exit_status = handle_status(inject_payload())) != SUCCESS) {
+		if ((handle_status(map_file(argv[1]))) != SUCCESS ||
+			(handle_status(inject_payload())) != SUCCESS) {
 			return (g_exit_status);
 		}
 		free_data();
-		return (EXIT_SUCCESS);
+		return (SUCCESS);
 	} else
 		return ERROR(BAD_ARGS);
 }
