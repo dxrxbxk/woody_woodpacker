@@ -65,7 +65,7 @@ static int	find_section_by_name(data_t *data, char *name) {
 			return (SUCCESS);
 		}
 	}
-	return (FAILURE);
+	return (EXIT_FAILURE);
 }
 
 static int	update_section_size(data_t *data, size_t offset) {
@@ -96,11 +96,11 @@ static int	patch_new_file(data_t *data) {
 
 	int fd = open("woody", O_CREAT | O_WRONLY | O_TRUNC, 0755);
 	if (fd == -1)
-		handle_syscall("open");
+		return (EXIT_FAILURE);
 
 	if (write(fd, data->_file_map, data->_file_size) == -1) {
 		close(fd);
-		handle_syscall("write");
+		return (EXIT_FAILURE);
 	}
 
 	close(fd);
@@ -132,6 +132,10 @@ static int	inject_payload(data_t* data) {
 
 	if (ft_memcpy(data->_file_map + codecave_offset, g_payload, g_payload_size) == NULL) {
 		write(STDERR_FILENO, "Failed to inject payload\n", 26);
+		return (EXIT_FAILURE); }
+
+	if (patch_new_file(data)) {
+		write(STDERR_FILENO, "Failed to patch new file\n", 26);
 		return (EXIT_FAILURE); }
 
 	return (EXIT_SUCCESS);
@@ -227,7 +231,6 @@ int main(int argc, char *argv[]) {
 
 	if (data != NULL) {
 		inject_payload(data);
-		patch_new_file(data);
 	}
 
 	destroy_data(data);
