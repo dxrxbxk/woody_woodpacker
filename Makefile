@@ -29,124 +29,112 @@ override MAKEFLAGS += --warn-undefined-variables --no-builtin-rules
 # -- D I R E C T O R I E S ----------------------------------------------------
 
 # source directory
-override SRCDIR := src
+override src_dir := $(CURDIR)/src
 
 # include directory
-override INCDIR := inc
-
-# build directory
-override BLDDIR := build
-
-# object directory
-override OBJDIR := $(BLDDIR)/object
-
-# dependency directory
-override DEPDIR := $(BLDDIR)/dependency
-
-# json directory
-override JSNDIR := $(BLDDIR)/json
-
-# current directory
-override ROOT := $(shell pwd)
-
+override inc_dir := $(CURDIR)/inc
 
 
 # -- T A R G E T S ------------------------------------------------------------
 
 # project name
-override PROJECT := woody_woodpacker
+override project := woody_woodpacker
 
 # main executable
-override NAME := $(PROJECT)
+override name := $(project)
 
 # compile command database
-override CMDDB := compile_commands.json
+override cmddb := compile_commands.json
 
 # -- S O U R C E S ------------------------------------------------------------
 
 # get all source files
-override SRC := $(shell find $(SRCDIR) -type f -name "*.c")
+override srcs := $(shell find $(src_dir) -type f -name "*.c")
 
-# get all header files
-override HDR := $(shell find $(INCDIR) -type f -name "*.h")
+# object files
+override objs := $(srcs:%.c=%.o)
 
-# get all header directories
-override HDRDIR := $(sort $(dir $(HDR)))
-
-# pattern substitution for object files
-override OBJ := $(patsubst $(SRCDIR)/%.c, $(OBJDIR)/%.o,    $(SRC))
-
-# pattern substitution for dependency files
-override DEP := $(patsubst $(OBJDIR)/%.o,   $(DEPDIR)/%.d,    $(OBJ))
-
-override JSN := $(patsubst $(SRCDIR)/%.c,   $(JSNDIR)/%.json, $(SRC))
-
-
-override HIR := $(sort $(dir $(SRC)))
-override OBJHIR := $(HIR:$(SRCDIR)/%=$(OBJDIR)/%)
-override DEPHIR := $(HIR:$(SRCDIR)/%=$(DEPDIR)/%)
-override JSNHIR := $(HIR:$(SRCDIR)/%=$(JSNDIR)/%)
+# dependency files
+override deps := $(objs:%.o=%.d)
 
 
 
 # -- C O M P I L E R  S E T T I N G S -----------------------------------------
 
 # compiler
-override CC := $(shell which clang)
+override cc := $(shell which clang)
 
 # compiler standard
-override STD := -std=c99 -m64
+override std := -std=c99 -m64
 
 # compiler optimization
-override OPT := -O3 -g -gdwarf-4
-#--g3 -gdwarf-4
+override opt := -O3
+
+#debug
+override dbg := -g -gdwarf-4
+
+def ?= VERBOSE DEBUG
+
+override defines := $(addprefix -D, $(def))
 
 # compiler flags
-override CFLAGS := -Wall -Wextra -Werror -Wpedantic \
-					 -Wno-unused -Wno-unused-variable -Wno-unused-parameter
+override cflags := $(std) $(opt) $(dbg) $(defines) -I$(inc_dir) \
+					-Wall -Wextra -Werror -Wpedantic \
+					-Wno-unused -Wno-unused-variable -Wno-unused-parameter
 
 # dependency flags
-override DEPFLAGS = -MT $@ -MMD -MP -MF $(DEPDIR)/$*.d
+override depflags = -MT $@ -MMD -MP -MF $*.d
 
-# compile command flag
-override CMPFLAG = -MJ $(JSNDIR)/$*.json
-
-# all include subdirs with -I prefix
-override INCLUDES := $(addprefix -I, $(HDRDIR))
-
-DEF ?= VERBOSE DEBUG
-
-override DEFINES := $(addprefix -D, $(DEF))
 
 
 
 # -- M A I N  T A R G E T S ---------------------------------------------------
 
-all: $(NAME) $(CMDDB)
+all: $(name) $(cmddb)
 
-$(NAME): $(OBJ)
-	@echo "  linking -> \033[34m"$@"\033[0m"
-	@$(CC) $^ -o $@
+$(name): $(objs)
+	@$(cc) $^ -o $@
+	echo "  linking -> \033[34m"$@"\033[0m"
 
--include $(DEP)
-$(OBJDIR)/%.o : $(SRCDIR)/%.c Makefile | $(OBJHIR) $(DEPHIR) $(JSNHIR)
-	@echo "compiling -> \033[33m"$(<F)"\033[0m"
-	@$(CC) $(STD) $(OPT) $(CFLAGS) $(DEFINES) $(CMPFLAG) $(DEPFLAGS) $(INCLUDES) -c $< -o $@
+-include $(deps)
+%.o : %.c Makefile
+	@$(cc) $(cflags) $(depflags) -c $< -o $@
+	echo "compiling -> \033[33m"$(<F)"\033[0m"
 
-$(CMDDB) : $(JSN)
-	@echo "[\n"$$(cat $(JSN) | sed '$$s/,\s*$$//')"\n]" | jq > $@
+$(cmddb): $(srcs) Makefile
+	$(call generate_compile_commands)
 
-$(OBJHIR) $(DEPHIR) $(JSNHIR):
-	@mkdir -p $@
 
 clean:
-	@rm -rvf $(BLDDIR) $(CMDDB)
+	@rm -rvf $(objs) $(deps) $(cmddb) '.cache'
 
 fclean: clean
-	@rm -vf $(NAME) woody
+	@rm -vf $(name) woody
 
 re: fclean all
+
 
 # -- P H O N Y  T A R G E T S -------------------------------------------------
 
 .PHONY: all clean fclean re
+
+
+# -- F U N C T I O N S --------------------------------------------------------
+
+define generate_compile_commands
+	@echo '[' > $@
+	for file in $(srcs); do
+		echo '\t{\n\t\t"directory": "'$(CURDIR)'",' >> $@
+		echo '\t\t"file": "'$$file'",' >> $@
+		echo '\t\t"output": "'$${file%.c}'.o",' >> $@
+		echo '\t\t"arguments": [' >> $@
+		echo '\t\t\t"$(cc)",' >> $@
+		for flag in $(cflags); do
+			echo '\t\t\t"'$$flag'",' >> $@
+		done
+		echo '\t\t\t"-c",\n\t\t\t"'$$file'",' >> $@
+		echo '\t\t\t"-o",\n\t\t\t"'$${file%.c}'.o"\n\t\t]\n\t},' >> $@
+	done
+	truncate -s -2 $@
+	echo '\n]' >> $@
+endef
