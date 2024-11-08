@@ -56,7 +56,9 @@ int	ft_strlen(char *str);
 int	handle_error(int error_code);
 int	handle_syscall(char *msg);
 
+char	*sprint_hex(uint8_t *data, size_t size);
 void	print_hex(void *data, size_t size);
+int	print_key(int64_t key);
 
 data_t	*get_data(void);
 void	free_data(void);

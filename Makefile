@@ -65,13 +65,13 @@ override deps := $(objs:%.o=%.d)
 override cc := $(shell which clang)
 
 # compiler standard
-override std := -std=c99 -m64
+override std := -std=gnu99 -m64
 
 # compiler optimization
 override opt := -O3
 
 #debug
-override dbg := -g -gdwarf-4
+override dbg := -g -gdwarf-4 -fsanitize=address
 
 def ?= VERBOSE DEBUG
 
@@ -82,8 +82,12 @@ override cflags := $(std) $(opt) $(dbg) $(defines) -I$(inc_dir) \
 					-Wall -Wextra -Werror -Wpedantic \
 					-Wno-unused -Wno-unused-variable -Wno-unused-parameter
 
+override ldflags := -lasan
+
 # dependency flags
 override depflags = -MT $@ -MMD -MP -MF $*.d
+
+
 
 
 
@@ -93,7 +97,7 @@ override depflags = -MT $@ -MMD -MP -MF $*.d
 all: $(name) $(cmddb)
 
 $(name): $(objs)
-	@$(cc) $^ -o $@
+	@$(cc) $^ -o $@ $(ldflags)
 	echo "  linking -> \033[34m"$@"\033[0m"
 
 -include $(deps)

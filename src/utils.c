@@ -34,6 +34,28 @@ void	print_hex(void *data, size_t size) {
 	printf("\n");
 }
 
+int	print_key(int64_t key) {
+	char key_str[5 + sizeof(int64_t) * 3 + 1] = "key: ";
+	char *key_ptr = key_str + 5;
+
+	for (size_t i = 0U; i < sizeof(int64_t); ++i) {
+		uint8_t byte = (uint8_t)(key >> (i * 8));
+		*(key_ptr)     = "0123456789abcdef"[(byte & 0xf0) >> 4];
+		*(key_ptr + 1) = "0123456789abcdef"[byte & 0x0f];
+		*(key_ptr + 2) = ' ';
+		key_ptr += 3;
+	}
+	*(key_ptr - 1) = '\n';
+	*key_ptr = '\0';
+
+	if (write(STDOUT_FILENO, key_str, ft_strlen(key_str)) == -1) {
+		perror("write");
+		return (EXIT_FAILURE);
+	}
+	return (EXIT_SUCCESS);
+}
+
+
 int	handle_syscall(char *msg) {
 	perror(msg);
 	free_data();

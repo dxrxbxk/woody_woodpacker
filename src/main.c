@@ -20,7 +20,7 @@ static int	find_codecave(data_t *data, size_t *codecave_offset, size_t *codecave
 			PRINT("phdr[i].p_offset: %lx, phdr[i].p_filesz: %lx, codecave_offset: %lx, codecave_size: %lx\n", phdr[i].p_offset, phdr[i].p_filesz, *codecave_offset, *codecave_size);
 
 			if (*codecave_size < g_payload_size) 
-				return (ERROR(CODECAVE_SIZE_TOO_SMALL));
+				return (EXIT_FAILURE);
 
 			ehdr->e_entry		= phdr[i].p_vaddr + phdr[i].p_filesz;
 			phdr[i].p_flags		|= PF_W;
@@ -31,9 +31,8 @@ static int	find_codecave(data_t *data, size_t *codecave_offset, size_t *codecave
 			int64_t key			= gen_key_64();
 			uint64_t start		= *codecave_offset - data->_oentry_offset;
 
-			printf("Key: ");
-			print_hex(&key, sizeof(key));
-
+			if (print_key(key)) {
+				return (EXIT_FAILURE); }
 
 			PRINT("Old entry: %lx, phdr[i].p_vaddr: %lx, phdr[i].p_filesz: %lx\n", data->_oentry_offset, phdr[i].p_vaddr, phdr[i].p_filesz);
 
@@ -45,12 +44,12 @@ static int	find_codecave(data_t *data, size_t *codecave_offset, size_t *codecave
 			PRINT("Found codecave program ehdr.address: %lx, offset: %lx\n", phdr[i].p_vaddr, *codecave_offset);
 			PRINT("Old entry: %lx, new entry: %lx, jmp range: %i\n", data->_oentry_offset, ehdr->e_entry, jmp_range);
 
-			return (SUCCESS);
+			return (EXIT_SUCCESS);
 
 			} 
 		}
 
-	return (FAILURE);
+	return (EXIT_FAILURE);
 }
 
 static int	find_section_by_name(data_t *data, char *name) {
@@ -75,22 +74,22 @@ static int	update_section_size(data_t *data, size_t offset) {
 	Elf64_Shdr	*strtab = &shdr[header->e_shstrndx];
 	char	*strtab_p = (char *)data->_file_map + strtab->sh_offset;
 
-	printf("update_section_size: offset: %lx\n", offset);
+	DEBUG_P("update_section_size: offset: %lx\n", offset);
 
 	for (size_t i = 0; i < header->e_shnum; i++) {
 		if (offset >= shdr[i].sh_offset) {
-			if (i + 1 < header->e_shnum && offset < shdr[i + 1].sh_offset) {
+			if (i + 1 < header->e_shnum && offset + g_payload_size <= shdr[i + 1].sh_offset) {
 				shdr[i].sh_size += g_payload_size;
 				DEBUG_P("update_section_size: Found section %s at %lx\n", strtab_p + shdr[i].sh_name, shdr[i].sh_addr);
-				return (SUCCESS);
-			} else if (i + 1 == header->e_shnum) {
+				return (EXIT_SUCCESS);
+			} else if (i + 1 == header->e_shnum && offset < shdr[i].sh_offset + shdr[i].sh_size) {
 				shdr[i].sh_size += g_payload_size;
 				DEBUG_P("update_section_size: Found section %s at %lx\n", strtab_p + shdr[i].sh_name, shdr[i].sh_addr);
-				return (SUCCESS);
+				return (EXIT_SUCCESS);
 			}
 		}
 	}
-	return (FAILURE);
+	return (EXIT_FAILURE);
 }
 
 static int	patch_new_file(data_t *data) {
@@ -106,34 +105,36 @@ static int	patch_new_file(data_t *data) {
 
 	close(fd);
 
-	return (SUCCESS);
+	return (EXIT_SUCCESS);
 }
 
 static int	inject_payload(data_t* data) {
 
 	size_t	codecave_offset	= 0;
-	size_t	codecave_size	= 0;
-	Elf64_Ehdr	*ehdr	= (Elf64_Ehdr *)data->_file_map;
+	size_t	codecave_size = 0;
+	Elf64_Ehdr	*ehdr = (Elf64_Ehdr *)data->_file_map;
 
-	if (find_section_by_name(data, ".text"))
-		return ERROR(NO_SECTION_FOUND);
+	if (find_section_by_name(data, ".text")) {
+		write(STDERR_FILENO, "Failed to find section\n", 24);
+		return (EXIT_FAILURE); }
 
 	DEBUG_P("Entry offset: %lx\n", data->_oentry_offset);
 
-	if (find_codecave(data, &codecave_offset, &codecave_size))
-		return ERROR(NO_CODECAVE_FOUND);
+	if (find_codecave(data, &codecave_offset, &codecave_size)) {
+		write(STDERR_FILENO, "Failed to find codecave\n", 25);
+		return (EXIT_FAILURE); }
 
-	if (update_section_size(data, codecave_offset))
-		return ERROR(NO_SECTION_FOUND);
+	if (update_section_size(data, codecave_offset)) {
+		write(STDERR_FILENO, "Failed to update section size\n", 31);
+		return (EXIT_FAILURE); }
 
 	PRINT("codecave size: %zu, offset: %lx, payload size: %zu\n", codecave_size, codecave_offset, g_payload_size);
 
-	if (ft_memcpy(data->_file_map + codecave_offset, g_payload, g_payload_size) == NULL)
-		return ERROR(COPY_FAILED);
+	if (ft_memcpy(data->_file_map + codecave_offset, g_payload, g_payload_size) == NULL) {
+		write(STDERR_FILENO, "Failed to inject payload\n", 26);
+		return (EXIT_FAILURE); }
 
-	patch_new_file(data);
-
-	return (SUCCESS);
+	return (EXIT_SUCCESS);
 }
 
 void destroy_data(data_t *data) {
@@ -219,13 +220,14 @@ data_t*	init_data(const char *filename) {
 int main(int argc, char *argv[]) {
 
 	if (argc != 2) {
-		fprintf(stderr, "Usage: %s <filename>\n", argv[0U]);
+		dprintf(STDERR_FILENO, "Usage: %s <filename>\n", argv[0U]);
 		return EXIT_FAILURE; }
 
 	data_t* data = init_data(argv[1U]);
 
 	if (data != NULL) {
 		inject_payload(data);
+		patch_new_file(data);
 	}
 
 	destroy_data(data);
