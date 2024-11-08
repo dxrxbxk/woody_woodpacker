@@ -109,9 +109,8 @@ static int	patch_new_file(data_t *data) {
 	return (SUCCESS);
 }
 
-static int	inject_payload(void) {
+static int	inject_payload(data_t* data) {
 
-	data_t	*data	= get_data();
 	size_t	codecave_offset	= 0;
 	size_t	codecave_size	= 0;
 	Elf64_Ehdr	*ehdr	= (Elf64_Ehdr *)data->_file_map;
@@ -137,72 +136,98 @@ static int	inject_payload(void) {
 	return (SUCCESS);
 }
 
-static int	check_file(int fd) {
-	char	ehdr[5];
+void destroy_data(data_t *data) {
 
-	if (read(fd, ehdr, 5) == -1) {
-		close(fd);
-		handle_syscall("read");
-	}
+	if (data == NULL)
+		return;
 
-	if (ft_memcmp(ehdr, "\x7f""ELF", 4) != 0) {
-		return ERROR(NOT_ELF_FILE);
-	} else if (ft_memcmp(ehdr + 4, "\x02", 1) != 0) {
-		return ERROR(NOT_X86_64);
-	}
+	if (data->_file_map != NULL)
+		munmap(data->_file_map, data->_file_size);
 
-	return (SUCCESS);
+	data->_file_map = NULL;
+
+	if (data->_fd != -1)
+		close(data->_fd);
+
+	data->_fd = -1;
+
+	free(data);
 }
 
-static int	map_file(char *filename) {
-	int	fd = open(filename, O_RDONLY);
-	if (fd == -1)
-		handle_syscall("open");
+data_t*	init_data(const char *filename) {
 
-	if (check_file(fd)) {
-		close(fd);
-		return (FAILURE);
+	data_t *data = (data_t *)malloc(sizeof(data_t));
+
+	if (data == NULL) {
+		perror("Failed to allocate data");
+		return NULL;
 	}
 
-	ssize_t	file_size = lseek(fd, 0, SEEK_END);
+	data->_fd = -1;
+	data->_file_map = NULL;
+	data->_file_size = 0U;
+	data->_oentry_offset = 0U;
+
+	data->_fd = open(filename, O_RDONLY);
+
+	if (data->_fd == -1) {
+		perror(filename);
+		return NULL;
+	}
+
+	{
+		char ehdr[5U];
+
+		if (read(data->_fd, ehdr, 5U) == -1) {
+			perror(filename);
+			return NULL;
+		}
+
+		if (ft_memcmp(ehdr, "\x7f""ELF", 4) != 0) {
+			write(STDERR_FILENO, "Not an ELF file\n", 16);
+			return NULL;
+		}
+		else if (ft_memcmp(ehdr + 4, "\x02", 1) != 0) {
+			write(STDERR_FILENO, "Not an x86_64 ELF file\n", 23);
+			return NULL;
+		}
+	}
+
+
+	const ssize_t file_size = lseek(data->_fd, 0, SEEK_END);
+
 	if (file_size == -1) {
-		close(fd);
-		handle_syscall("lseek");
+		perror("Failed to get file size");
+		return NULL;
 	}
 
-	lseek(fd, 0, SEEK_SET);
+	data->_file_size = (size_t)file_size;
 
-	void *file_map = mmap(NULL, file_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+	void *file_map = mmap(NULL, data->_file_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, data->_fd, 0);
+
 	if (file_map == MAP_FAILED) {
-		close(fd);
-		handle_syscall("mmap");
+		perror("Failed to map file");
+		return NULL;
 	}
 
-	data_t *data		= get_data();
-	data->_file_map		= file_map;
-	data->_file_size	= file_size;
+	data->_file_map = (uint8_t *)file_map;
 
-	close(fd);
-
-	return (SUCCESS);
+	return data;
 }
 
-static int handle_status(int status) {
-    if (status != SUCCESS) {
-        free_data();
-        return status;
-    }
-    return (SUCCESS);
-}
 
 int main(int argc, char *argv[]) {
-	if (argc == 2) {
-		if ((handle_status(map_file(argv[1]))) != SUCCESS ||
-			(handle_status(inject_payload())) != SUCCESS) {
-			return (g_exit_status);
-		}
-		free_data();
-		return (SUCCESS);
-	} else
-		return ERROR(BAD_ARGS);
+
+	if (argc != 2) {
+		fprintf(stderr, "Usage: %s <filename>\n", argv[0U]);
+		return EXIT_FAILURE; }
+
+	data_t* data = init_data(argv[1U]);
+
+	if (data != NULL) {
+		inject_payload(data);
+	}
+
+	destroy_data(data);
+	return 0;
 }

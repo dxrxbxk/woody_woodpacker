@@ -43,6 +43,7 @@ extern size_t	g_payload_size;
 extern int64_t	g_exit_status;
 
 typedef struct data_s {
+	int						_fd;
 	uint8_t					*_file_map;
 	size_t					_file_size;
 	Elf64_Addr				_oentry_offset;
