@@ -18,7 +18,8 @@ static int	find_codecave(data_t *data, size_t *codecave_offset, size_t *codecave
 			continue;
 
 		*codecave_offset = phdr[i].p_offset + phdr[i].p_filesz;
-		*codecave_size   = phdr[i].p_offset + PAGE_SIZE - *codecave_offset;
+		int next_offset = phdr[i].p_offset + (phdr[i].p_memsz / PAGE_SIZE + 1) * PAGE_SIZE;
+		*codecave_size = next_offset - *codecave_offset;
 
 		PRINT("phdr[i].p_offset: %lx, phdr[i].p_filesz: %lx, codecave_offset: %lx, codecave_size: %lx\n",
 			phdr[i].p_offset, phdr[i].p_filesz, *codecave_offset, *codecave_size);
