@@ -16,7 +16,7 @@ const char*	error_strings(int code) {
 	return (error_strings[code]);
 }
 
-int	ft_strlen(char *str) {
+int	ft_strlen(const char *str) {
 	int i = 0;
 	while (str[i]) {
 		i++;

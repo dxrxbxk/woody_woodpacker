@@ -52,7 +52,7 @@ typedef struct data_s {
 void	*ft_memcpy(void *dest, const void *src, size_t n);
 int	ft_memcmp(const void *s1, const void *s2, size_t n);
 
-int	ft_strlen(char *str);
+int	ft_strlen(const char *str);
 int	handle_error(int error_code);
 int	handle_syscall(char *msg);
 

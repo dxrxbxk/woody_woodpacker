@@ -155,46 +155,46 @@ void destroy_data(data_t *data) {
 		close(data->_fd);
 
 	data->_fd = -1;
-
-	free(data);
 }
 
-data_t*	init_data(const char *filename) {
+void print_error(const char* where) {
+	dprintf(STDERR_FILENO, "%s\n", where);
+}
 
-	data_t *data = (data_t *)malloc(sizeof(data_t));
+void runtime_error(const char* where) {
+	perror(where);
+}
 
-	if (data == NULL) {
-		perror("Failed to allocate data");
-		return NULL;
-	}
 
-	data->_fd = -1;
-	data->_file_map = NULL;
-	data->_file_size = 0U;
+int init_data(data_t* data, const char *filename) {
+
+	data->_fd            = -1;
+	data->_file_map      = NULL;
+	data->_file_size     = 0U;
 	data->_oentry_offset = 0U;
 
 	data->_fd = open(filename, O_RDONLY);
 
 	if (data->_fd == -1) {
-		perror(filename);
-		return NULL;
+		runtime_error(filename);
+		return -1;
 	}
 
 	{
 		char ehdr[5U];
 
 		if (read(data->_fd, ehdr, 5U) == -1) {
-			perror(filename);
-			return NULL;
+			runtime_error(filename);
+			return -1;
 		}
 
 		if (ft_memcmp(ehdr, "\x7f""ELF", 4) != 0) {
-			write(STDERR_FILENO, "Not an ELF file\n", 16);
-			return NULL;
+			print_error("Not an ELF file");
+			return -1;
 		}
 		else if (ft_memcmp(ehdr + 4, "\x02", 1) != 0) {
-			write(STDERR_FILENO, "Not an x86_64 ELF file\n", 23);
-			return NULL;
+			print_error("Not an x86_64 ELF file");
+			return -1;
 		}
 	}
 
@@ -202,8 +202,8 @@ data_t*	init_data(const char *filename) {
 	const ssize_t file_size = lseek(data->_fd, 0, SEEK_END);
 
 	if (file_size == -1) {
-		perror("Failed to get file size");
-		return NULL;
+		runtime_error("Failed to get file size");
+		return -1;
 	}
 
 	data->_file_size = (size_t)file_size;
@@ -211,13 +211,13 @@ data_t*	init_data(const char *filename) {
 	void *file_map = mmap(NULL, data->_file_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, data->_fd, 0);
 
 	if (file_map == MAP_FAILED) {
-		perror("Failed to map file");
-		return NULL;
+		runtime_error("Failed to map file");
+		return -1;
 	}
 
 	data->_file_map = (uint8_t *)file_map;
 
-	return data;
+	return 0;
 }
 
 
@@ -227,12 +227,14 @@ int main(int argc, char *argv[]) {
 		dprintf(STDERR_FILENO, "Usage: %s <filename>\n", argv[0U]);
 		return EXIT_FAILURE; }
 
-	data_t* data = init_data(argv[1U]);
+	data_t data;
 
-	if (data != NULL) {
-		inject_payload(data);
-	}
+	const int state = init_data(&data, argv[1U]);
 
-	destroy_data(data);
-	return 0;
+	if (state != -1)
+		inject_payload(&data);
+
+	destroy_data(&data);
+
+	return EXIT_SUCCESS;
 }
