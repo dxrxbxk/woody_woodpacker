@@ -6,48 +6,56 @@ char	g_payload[]	= "\x52\x48\x8d\x35\xf8\xff\xff\xff\x48\x2b\x35\x58\x00\x00\x00
 size_t	g_payload_size	= sizeof(g_payload) - 1;
 int64_t g_exit_status	= SUCCESS;
 
+
 static int	find_codecave(data_t *data, size_t *codecave_offset, size_t *codecave_size) {
 
 	Elf64_Ehdr	*ehdr	= (Elf64_Ehdr *)data->_file_map;
 	Elf64_Phdr	*phdr	= (Elf64_Phdr *)(data->_file_map + ehdr->e_phoff);
 
-	for (size_t i = 0; i < ehdr->e_phnum; i++) {
-		if (phdr[i].p_type == PT_LOAD && phdr[i].p_flags & PF_X) {
+	for (size_t i = 0; i < ehdr->e_phnum; ++i) {
 
-			*codecave_offset	= phdr[i].p_offset + phdr[i].p_filesz;
-			*codecave_size		= phdr[i].p_offset + PAGE_SIZE - *codecave_offset;
+		if (phdr[i].p_type != PT_LOAD || (phdr[i].p_flags & PF_X) == 0)
+			continue;
 
-			PRINT("phdr[i].p_offset: %lx, phdr[i].p_filesz: %lx, codecave_offset: %lx, codecave_size: %lx\n", phdr[i].p_offset, phdr[i].p_filesz, *codecave_offset, *codecave_size);
+		*codecave_offset = phdr[i].p_offset + phdr[i].p_filesz;
+		*codecave_size   = phdr[i].p_offset + PAGE_SIZE - *codecave_offset;
 
-			if (*codecave_size < g_payload_size) 
-				return (EXIT_FAILURE);
+		PRINT("phdr[i].p_offset: %lx, phdr[i].p_filesz: %lx, codecave_offset: %lx, codecave_size: %lx\n",
+			phdr[i].p_offset, phdr[i].p_filesz, *codecave_offset, *codecave_size);
 
-			ehdr->e_entry		= phdr[i].p_vaddr + phdr[i].p_filesz;
-			phdr[i].p_flags		|= PF_W;
-			phdr[i].p_filesz	+= g_payload_size;
-			phdr[i].p_memsz		+= g_payload_size;
+		if (*codecave_size < g_payload_size) 
+			return EXIT_FAILURE;
 
-			int32_t	jmp_range	= (int64_t)data->_oentry_offset - ((int64_t)phdr[i].p_offset + (int64_t)phdr[i].p_filesz) + ADDR_OFFSET;
-			int64_t key			= gen_key_64();
-			uint64_t start		= *codecave_offset - data->_oentry_offset;
+		ehdr->e_entry     = phdr[i].p_vaddr + phdr[i].p_filesz;
+		phdr[i].p_flags  |= PF_W;
+		phdr[i].p_filesz += g_payload_size;
+		phdr[i].p_memsz  += g_payload_size;
 
-			if (print_key(key)) {
-				return (EXIT_FAILURE); }
+		int32_t	jmp_range = (int64_t)data->_oentry_offset - ((int64_t)phdr[i].p_offset + (int64_t)phdr[i].p_filesz) + ADDR_OFFSET;
+		int64_t key;
 
-			PRINT("Old entry: %lx, phdr[i].p_vaddr: %lx, phdr[i].p_filesz: %lx\n", data->_oentry_offset, phdr[i].p_vaddr, phdr[i].p_filesz);
+		if (gen_key_64(&key) == -1)
+			return EXIT_FAILURE;
 
-			encrypt(data->_file_map + data->_oentry_offset, phdr[i].p_filesz, key);
+		uint64_t start = *codecave_offset - data->_oentry_offset;
 
-			patch_payload(start, key, jmp_range);
+		if (print_key(key))
+			return EXIT_FAILURE;
 
 
-			PRINT("Found codecave program ehdr.address: %lx, offset: %lx\n", phdr[i].p_vaddr, *codecave_offset);
-			PRINT("Old entry: %lx, new entry: %lx, jmp range: %i\n", data->_oentry_offset, ehdr->e_entry, jmp_range);
+		PRINT("Old entry: %lx, phdr[i].p_vaddr: %lx, phdr[i].p_filesz: %lx\n", data->_oentry_offset, phdr[i].p_vaddr, phdr[i].p_filesz);
 
-			return (EXIT_SUCCESS);
+		encrypt(data->_file_map + data->_oentry_offset, phdr[i].p_filesz, key);
 
-			} 
-		}
+		patch_payload(start, key, jmp_range);
+
+
+		PRINT("Found codecave program ehdr.address: %lx, offset: %lx\n", phdr[i].p_vaddr, *codecave_offset);
+		PRINT("Old entry: %lx, new entry: %lx, jmp range: %i\n", data->_oentry_offset, ehdr->e_entry, jmp_range);
+
+		return (EXIT_SUCCESS);
+
+	}
 
 	return (EXIT_FAILURE);
 }
@@ -157,13 +165,6 @@ void destroy_data(data_t *data) {
 	data->_fd = -1;
 }
 
-void print_error(const char* where) {
-	dprintf(STDERR_FILENO, "%s\n", where);
-}
-
-void runtime_error(const char* where) {
-	perror(where);
-}
 
 
 int init_data(data_t* data, const char *filename) {

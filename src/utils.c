@@ -24,7 +24,7 @@ int	ft_strlen(const char *str) {
 	return (i);
 }
 
-void	print_hex(void *data, size_t size) {
+void print_hex(void *data, size_t size) {
 	for (size_t i = 0; i < size; i++) {
 		printf("%02x", ((unsigned char *)data)[i]);
 			printf(" ");
@@ -55,6 +55,13 @@ int	print_key(int64_t key) {
 	return (EXIT_SUCCESS);
 }
 
+void print_error(const char* where) {
+	dprintf(STDERR_FILENO, "%s\n", where);
+}
+
+void runtime_error(const char* where) {
+	perror(where);
+}
 
 int	handle_syscall(char *msg) {
 	perror(msg);

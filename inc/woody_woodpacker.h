@@ -49,26 +49,28 @@ typedef struct data_s {
 	Elf64_Addr				_oentry_offset;
 } data_t;
 
-void	*ft_memcpy(void *dest, const void *src, size_t n);
-int	ft_memcmp(const void *s1, const void *s2, size_t n);
+void *ft_memcpy(void *dest, const void *src, size_t n);
+int ft_memcmp(const void *s1, const void *s2, size_t n);
 
-int	ft_strlen(const char *str);
-int	handle_error(int error_code);
-int	handle_syscall(char *msg);
+int ft_strlen(const char *str);
+int handle_error(int error_code);
+int handle_syscall(char *msg);
 
-char	*sprint_hex(uint8_t *data, size_t size);
-void	print_hex(void *data, size_t size);
-int	print_key(int64_t key);
+void print_error(const char*);
+void runtime_error(const char*);
 
-data_t	*get_data(void);
-void	free_data(void);
+char *sprint_hex(uint8_t *data, size_t size);
+void print_hex(void *data, size_t size);
+int print_key(int64_t key);
 
-uint8_t	gen_key(void);
-int64_t	gen_key_64(void);
-void	encrypt(uint8_t *data, size_t size, uint64_t key);
+data_t *get_data(void);
+void free_data(void);
 
-void	modify_payload(int64_t jmp_value, size_t offset, size_t size);
-void	patch_payload(int64_t codecave_diff, int64_t key, int32_t jmp_range);
+int gen_key_64(int64_t*);
+void encrypt(uint8_t *data, const size_t size, const uint64_t key);
+
+void modify_payload(int64_t jmp_value, size_t offset, size_t size);
+void patch_payload(int64_t codecave_diff, int64_t key, int32_t jmp_range);
 
 enum e_error_codes {
 	SUCCESS = 0,
