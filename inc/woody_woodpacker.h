@@ -35,7 +35,7 @@
 
 #define KEY_OFFSET		8
 #define ADDR_OFFSET		16
-#define JMP_OFFSET		20
+#define JMP_OFFSET		4
 
 extern char		g_payload[];
 extern size_t	g_payload_size;

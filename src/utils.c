@@ -25,7 +25,11 @@ int	ft_strlen(const char *str) {
 }
 
 void print_hex(void *data, size_t size) {
+	size_t page = 0x1000;
 	for (size_t i = 0; i < size; i++) {
+		if (i % page == 0) {
+			printf("\npage %lu\n", i / page);
+		}
 		printf("%02x", ((unsigned char *)data)[i]);
 			printf(" ");
 		if (i % 16 == 15)

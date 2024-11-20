@@ -71,7 +71,7 @@ override std := -std=gnu99 -m64
 override opt := -O3
 
 #debug
-override dbg := -g -gdwarf-4 -fsanitize=address
+override dbg := -g -gdwarf-4 
 
 def ?= VERBOSE DEBUG
 
@@ -82,7 +82,7 @@ override cflags := $(std) $(opt) $(dbg) $(defines) -I$(inc_dir) \
 					-Wall -Wextra -Werror -Wpedantic \
 					-Wno-unused -Wno-unused-variable -Wno-unused-parameter
 
-override ldflags := -lasan
+override ldflags :=
 
 # dependency flags
 override depflags = -MT $@ -MMD -MP -MF $*.d

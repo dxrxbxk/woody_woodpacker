@@ -2,66 +2,28 @@
 
 #define PAGE_SIZE	4096
 
-char	g_payload[]	= "\x52\x48\x8d\x35\xf8\xff\xff\xff\x48\x2b\x35\x58\x00\x00\x00\x48\x8b\x0d\x51\x00\x00\x00\x48\x8d\x3d\x52\x00\x00\x00\x48\x31\xdb\x48\x83\xf9\x00\x74\x23\x8a\x04\x1f\x30\x06\x48\xff\xc6\x48\xff\xc9\x48\xff\xc3\x48\x83\xe3\x07\xeb\xe6\x2e\x2e\x2e\x2e\x57\x4f\x4f\x44\x59\x2e\x2e\x2e\x2e\x0a\x00\xb8\x01\x00\x00\x00\xbf\x01\x00\x00\x00\x48\x8d\x35\xe0\xff\xff\xff\xba\x0f\x00\x00\x00\x0f\x05\x5a\xe9\x99\xff\xff\xff\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00";
+//char	g_payload[]	= "\x52\x48\x8d\x35\xf8\xff\xff\xff\x48\x2b\x35\x58\x00\x00\x00\x48\x8b\x0d\x51\x00\x00\x00\x48\x8d\x3d\x52\x00\x00\x00\x48\x31\xdb\x48\x83\xf9\x00\x74\x23\x8a\x04\x1f\x30\x06\x48\xff\xc6\x48\xff\xc9\x48\xff\xc3\x48\x83\xe3\x07\xeb\xe6\x2e\x2e\x2e\x2e\x57\x4f\x4f\x44\x59\x2e\x2e\x2e\x2e\x0a\x00\xb8\x01\x00\x00\x00\xbf\x01\x00\x00\x00\x48\x8d\x35\xe0\xff\xff\xff\xba\x0f\x00\x00\x00\x0f\x05\x5a\xe9\x99\xff\xff\xff\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00";
+char	g_payload[] = "\x52\xeb\x0f\x2e\x2e\x2e\x2e\x57\x4f\x4f\x44\x59\x2e\x2e\x2e\x2e\x0a\x00\xb8\x01\x00\x00\x00\xbf\x01\x00\x00\x00\x48\x8d\x35\xe0\xff\xff\xff\xba\x0f\x00\x00\x00\x0f\x05\x5a\xe9\xd0\xff\xff\xff";
 size_t	g_payload_size	= sizeof(g_payload) - 1;
 int64_t g_exit_status	= SUCCESS;
 
+void	ft_memmove(void *dst, const void *src, size_t n) {
+	uint8_t *d = (uint8_t *)dst;
+	const uint8_t *s = (const uint8_t *)src;
 
-static int	find_codecave(data_t *data, size_t *codecave_offset, size_t *codecave_size) {
-
-	Elf64_Ehdr	*ehdr	= (Elf64_Ehdr *)data->_file_map;
-	Elf64_Phdr	*phdr	= (Elf64_Phdr *)(data->_file_map + ehdr->e_phoff);
-
-	for (size_t i = 0; i < ehdr->e_phnum; ++i) {
-
-		if (phdr[i].p_type != PT_LOAD || (phdr[i].p_flags & PF_X) == 0)
-			continue;
-
-		*codecave_offset = phdr[i].p_offset + phdr[i].p_filesz;
-		int next_offset = phdr[i].p_offset + (phdr[i].p_memsz / PAGE_SIZE + 1) * PAGE_SIZE;
-		*codecave_size = next_offset - *codecave_offset;
-
-		PRINT("phdr[i].p_offset: %lx, phdr[i].p_filesz: %lx, codecave_offset: %lx, codecave_size: %lx\n",
-			phdr[i].p_offset, phdr[i].p_filesz, *codecave_offset, *codecave_size);
-
-		if (*codecave_size < g_payload_size) 
-			return EXIT_FAILURE;
-
-		ehdr->e_entry     = phdr[i].p_vaddr + phdr[i].p_filesz;
-		phdr[i].p_flags  |= PF_W;
-		phdr[i].p_filesz += g_payload_size;
-		phdr[i].p_memsz  += g_payload_size;
-
-		int32_t	jmp_range = (int64_t)data->_oentry_offset - ((int64_t)phdr[i].p_offset + (int64_t)phdr[i].p_filesz) + ADDR_OFFSET;
-		int64_t key;
-
-		if (gen_key_64(&key) == -1)
-			return EXIT_FAILURE;
-
-		uint64_t start = *codecave_offset - data->_oentry_offset;
-
-		if (print_key(key))
-			return EXIT_FAILURE;
-
-
-		PRINT("Old entry: %lx, phdr[i].p_vaddr: %lx, phdr[i].p_filesz: %lx\n", data->_oentry_offset, phdr[i].p_vaddr, phdr[i].p_filesz);
-
-		encrypt(data->_file_map + data->_oentry_offset, phdr[i].p_filesz, key);
-
-		patch_payload(start, key, jmp_range);
-
-
-		PRINT("Found codecave program ehdr.address: %lx, offset: %lx\n", phdr[i].p_vaddr, *codecave_offset);
-		PRINT("Old entry: %lx, new entry: %lx, jmp range: %i\n", data->_oentry_offset, ehdr->e_entry, jmp_range);
-
-		return (EXIT_SUCCESS);
-
+	if (d < s)
+		while (n--)
+			*d++ = *s++;
+	else {
+		d += n;
+		s += n;
+		while (n--)
+			*--d = *--s;
 	}
-
-	return (EXIT_FAILURE);
 }
 
-static int	find_section_by_name(data_t *data, char *name) {
+
+static Elf64_Shdr* find_section_by_name(data_t *data, char *name) {
 	Elf64_Ehdr	*header = (Elf64_Ehdr *)data->_file_map;
 	Elf64_Shdr	*shdr = (Elf64_Shdr *)(data->_file_map + header->e_shoff);
 	Elf64_Shdr	*strtab = &shdr[header->e_shstrndx];
@@ -70,11 +32,69 @@ static int	find_section_by_name(data_t *data, char *name) {
 	for (size_t i = 0; i < header->e_shnum; i++) {
 		if (ft_memcmp(strtab_p + shdr[i].sh_name, name, ft_strlen(name)) == 0) {
 			DEBUG_P("find_section_by_name: Found section %s at %lx\n", name, shdr[i].sh_addr);
-			data->_oentry_offset = shdr[i].sh_offset;
-			return (SUCCESS);
+			if (ft_memcmp(name, ".text", 5) == 0)
+				data->_oentry_offset = shdr[i].sh_addr;
+			return (&shdr[i]);
 		}
 	}
-	return (EXIT_FAILURE);
+	return (NULL);
+}
+
+static int	find_codecave(data_t *data, size_t *codecave_offset, size_t *codecave_size) {
+
+	Elf64_Ehdr	*ehdr	= (Elf64_Ehdr *)data->_file_map;
+	Elf64_Phdr	*phdr	= (Elf64_Phdr *)(data->_file_map + ehdr->e_phoff);
+	Elf64_Shdr	*shdr	= (Elf64_Shdr *)(data->_file_map + ehdr->e_shoff);
+
+	// data infection, after .data before .bss
+	printf("section header offset: %lx\n", ehdr->e_shoff);
+	printf("program header offset: %lx\n", ehdr->e_phoff);
+
+	for (size_t i = 0; i < ehdr->e_phnum; i++) {
+		if (phdr[i].p_type == PT_LOAD && phdr[i].p_flags & PF_W)
+		{
+			ehdr->e_entry = phdr[i].p_vaddr + phdr[i].p_filesz;
+			*codecave_offset = phdr[i].p_offset + phdr[i].p_filesz;
+			*codecave_size = g_payload_size;
+			phdr[i].p_filesz += g_payload_size;
+			phdr[i].p_memsz += g_payload_size;
+			phdr[i].p_flags |= PF_X;
+			DEBUG_P("find_codecave: Found codecave at %lx\n", *codecave_offset);
+			Elf64_Shdr *bss = find_section_by_name(data, ".bss");
+			if (bss) {
+				bss->sh_offset += g_payload_size;
+				bss->sh_addr += g_payload_size;
+			}
+
+
+			int32_t	jmp_range = (int64_t)data->_oentry_offset - ((int64_t)phdr[i].p_vaddr + (int64_t)phdr[i].p_filesz);
+			//int64_t key;
+			//
+			//if (gen_key_64(&key) == -1)
+			//	return EXIT_FAILURE;
+			//
+			//uint64_t start = *codecave_offset - data->_oentry_offset;
+			//
+			//if (print_key(key))
+			//	return EXIT_FAILURE;
+
+
+			PRINT("Old entry: %lx, phdr[i].p_vaddr: %lx, phdr[i].p_filesz: %lx, phdr[i].p_offset: %lx\n", data->_oentry_offset, phdr[i].p_vaddr, phdr[i].p_filesz, phdr[i].p_offset);
+			modify_payload(jmp_range, JMP_OFFSET, sizeof(jmp_range));
+
+			//encrypt(data->_file_map + data->_oentry_offset, phdr[i].p_filesz, key);
+
+			//patch_payload(start, key, jmp_range);
+
+			ft_memcpy(data->_file_map + *codecave_offset, g_payload, g_payload_size);
+
+
+			PRINT("Found codecave program ehdr.address: %lx, offset: %lx\n", phdr[i].p_vaddr, *codecave_offset);
+			PRINT("Old entry: %lx, new entry: %lx, jmp range: %i\n", data->_oentry_offset, ehdr->e_entry, jmp_range);
+
+		}
+	}
+	return (EXIT_SUCCESS);
 }
 
 static int	update_section_size(data_t *data, size_t offset) {
@@ -123,7 +143,7 @@ static int	inject_payload(data_t* data) {
 	size_t	codecave_size = 0;
 	Elf64_Ehdr	*ehdr = (Elf64_Ehdr *)data->_file_map;
 
-	if (find_section_by_name(data, ".text")) {
+	if (find_section_by_name(data, ".text") == NULL) {
 		write(STDERR_FILENO, "Failed to find section\n", 24);
 		return (EXIT_FAILURE); }
 
@@ -133,15 +153,13 @@ static int	inject_payload(data_t* data) {
 		write(STDERR_FILENO, "Failed to find codecave\n", 25);
 		return (EXIT_FAILURE); }
 
-	if (update_section_size(data, codecave_offset)) {
-		write(STDERR_FILENO, "Failed to update section size\n", 31);
-		return (EXIT_FAILURE); }
+	//if (update_section_size(data, codecave_offset)) {
+	//	write(STDERR_FILENO, "Failed to update section size\n", 31);
+	//	return (EXIT_FAILURE); }
 
 	PRINT("codecave size: %zu, offset: %lx, payload size: %zu\n", codecave_size, codecave_offset, g_payload_size);
 
-	if (ft_memcpy(data->_file_map + codecave_offset, g_payload, g_payload_size) == NULL) {
-		write(STDERR_FILENO, "Failed to inject payload\n", 26);
-		return (EXIT_FAILURE); }
+
 
 	if (patch_new_file(data)) {
 		write(STDERR_FILENO, "Failed to patch new file\n", 26);
@@ -175,7 +193,7 @@ int init_data(data_t* data, const char *filename) {
 	data->_file_size     = 0U;
 	data->_oentry_offset = 0U;
 
-	data->_fd = open(filename, O_RDONLY);
+	data->_fd = open(filename, O_RDWR);
 
 	if (data->_fd == -1) {
 		runtime_error(filename);
@@ -210,7 +228,11 @@ int init_data(data_t* data, const char *filename) {
 
 	data->_file_size = (size_t)file_size;
 
-	void *file_map = mmap(NULL, data->_file_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, data->_fd, 0);
+	printf("file size: %zu\n", data->_file_size);
+	printf("file size: %zu\n", data->_file_size);
+
+	uint8_t *file_map = mmap(NULL, data->_file_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, data->_fd, 0);
+
 
 	if (file_map == MAP_FAILED) {
 		runtime_error("Failed to map file");
