@@ -40,6 +40,21 @@ static Elf64_Shdr* find_section_by_name(data_t *data, char *name) {
 	return (NULL);
 }
 
+static Elf64_Shdr* find_section_by_address(data_t *data, size_t address) {
+	Elf64_Ehdr	*header = (Elf64_Ehdr *)data->_file_map;
+	Elf64_Shdr	*shdr = (Elf64_Shdr *)(data->_file_map + header->e_shoff);
+	Elf64_Shdr	*strtab = &shdr[header->e_shstrndx];
+	char	*strtab_p = (char *)data->_file_map + strtab->sh_offset;
+
+	for (size_t i = 0; i < header->e_shnum; i++) {
+		if (address >= shdr[i].sh_addr && address < shdr[i].sh_addr + shdr[i].sh_size) {
+			DEBUG_P("find_section_by_address: Found section at %lx, name: %s\n", shdr[i].sh_addr, strtab_p + shdr[i].sh_name);
+			return (&shdr[i]);
+		}
+	}
+	return (NULL);
+}
+
 static int	find_codecave(data_t *data, size_t *codecave_offset, size_t *codecave_size) {
 
 	Elf64_Ehdr	*ehdr	= (Elf64_Ehdr *)data->_file_map;
@@ -53,18 +68,27 @@ static int	find_codecave(data_t *data, size_t *codecave_offset, size_t *codecave
 	for (size_t i = 0; i < ehdr->e_phnum; i++) {
 		if (phdr[i].p_type == PT_LOAD && phdr[i].p_flags & PF_W)
 		{
+			Elf64_Shdr *codec = find_section_by_address(data, phdr[i].p_vaddr + phdr[i].p_filesz);
+			if (codec) {
+				//printf("changing section header\n");
+				//codec->sh_size += g_payload_size;
+				//codec->sh_offset += g_payload_size;
+				//ehdr->e_shoff += g_payload_size;
+				//codec->sh_addr += g_payload_size;
+
+				//codec->sh_flags |= SHF_EXECINSTR;
+
+			}
 			ehdr->e_entry = phdr[i].p_vaddr + phdr[i].p_filesz;
 			*codecave_offset = phdr[i].p_offset + phdr[i].p_filesz;
+
+
 			*codecave_size = g_payload_size;
 			phdr[i].p_filesz += g_payload_size;
 			phdr[i].p_memsz += g_payload_size;
 			phdr[i].p_flags |= PF_X;
 			DEBUG_P("find_codecave: Found codecave at %lx\n", *codecave_offset);
-			Elf64_Shdr *bss = find_section_by_name(data, ".bss");
-			if (bss) {
-				bss->sh_offset += g_payload_size;
-				bss->sh_addr += g_payload_size;
-			}
+
 
 
 			int32_t	jmp_range = (int64_t)data->_oentry_offset - ((int64_t)phdr[i].p_vaddr + (int64_t)phdr[i].p_filesz);
@@ -231,15 +255,28 @@ int init_data(data_t* data, const char *filename) {
 	printf("file size: %zu\n", data->_file_size);
 	printf("file size: %zu\n", data->_file_size);
 
-	uint8_t *file_map = mmap(NULL, data->_file_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, data->_fd, 0);
 
+	uint8_t *file_map = mmap(NULL, data->_file_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, data->_fd, 0);
 
 	if (file_map == MAP_FAILED) {
 		runtime_error("Failed to map file");
 		return -1;
 	}
 
-	data->_file_map = (uint8_t *)file_map;
+	uint8_t *new_map = mmap(NULL, data->_file_size + PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+
+	if (new_map == MAP_FAILED) {
+		runtime_error("Failed to map file");
+		return -1;
+	}
+
+	ft_memcpy(new_map, file_map, data->_file_size);
+
+	munmap(file_map, data->_file_size);
+
+	data->_file_size += PAGE_SIZE;
+
+	data->_file_map = new_map;
 
 	return 0;
 }
