@@ -1,6 +1,7 @@
 #ifndef WOODY_WOODPACKER_H
 #define WOODY_WOODPACKER_H
 
+#define _GNU_SOURCE
 #include <bits/stdint-intn.h>
 #include <stddef.h>
 #include <bits/stdint-uintn.h>
@@ -46,6 +47,7 @@ typedef struct data_s {
 	int						_fd;
 	uint8_t					*_file_map;
 	size_t					_file_size;
+	size_t					_mapped_size;
 	Elf64_Addr				_oentry_offset;
 } data_t;
 

@@ -1,4 +1,5 @@
 #include "woody_woodpacker.h"
+#include <sys/stat.h>
 
 #define PAGE_SIZE	4096
 
@@ -6,6 +7,31 @@
 char	g_payload[] = "\x52\xeb\x0f\x2e\x2e\x2e\x2e\x57\x4f\x4f\x44\x59\x2e\x2e\x2e\x2e\x0a\x00\xb8\x01\x00\x00\x00\xbf\x01\x00\x00\x00\x48\x8d\x35\xe0\xff\xff\xff\xba\x0f\x00\x00\x00\x0f\x05\x5a\xe9\xd0\xff\xff\xff";
 size_t	g_payload_size	= sizeof(g_payload) - 1;
 int64_t g_exit_status	= SUCCESS;
+
+#define ALIGN(value, align) (((value) + (align - 1)) & ~(align - 1))
+
+
+void	print_phdr(data_t *data) {
+	Elf64_Ehdr	*ehdr = (Elf64_Ehdr *)data->_file_map;
+	Elf64_Phdr	*phdr = (Elf64_Phdr *)(data->_file_map + ehdr->e_phoff);
+
+	for (size_t i = 0; i < ehdr->e_phnum; i++) {
+		printf("p_type: %x, p_flags: %x, p_offset: %lx, p_vaddr: %lx, p_paddr: %lx, p_filesz: %lx, p_memsz: %lx, p_align: %lx\n",
+			phdr[i].p_type, phdr[i].p_flags, phdr[i].p_offset, phdr[i].p_vaddr, phdr[i].p_paddr, phdr[i].p_filesz, phdr[i].p_memsz, phdr[i].p_align);
+	}
+}
+
+void	print_section(data_t *data) {
+	Elf64_Ehdr	*ehdr = (Elf64_Ehdr *)data->_file_map;
+	Elf64_Shdr	*shdr = (Elf64_Shdr *)(data->_file_map + ehdr->e_shoff);
+	Elf64_Shdr	*strtab = &shdr[ehdr->e_shstrndx];
+	char	*strtab_p = (char *)data->_file_map + strtab->sh_offset;
+
+	for (size_t i = 0; i < ehdr->e_shnum; i++) {
+		printf("sh_name: %s, sh_type: %x, sh_flags: %lx, sh_addr: %lx, sh_offset: %lx, sh_size: %lx, sh_link: %x, sh_info: %x, sh_addralign: %lx, sh_entsize: %lx\n",
+			strtab_p + shdr[i].sh_name, shdr[i].sh_type, shdr[i].sh_flags, shdr[i].sh_addr, shdr[i].sh_offset, shdr[i].sh_size, shdr[i].sh_link, shdr[i].sh_info, shdr[i].sh_addralign, shdr[i].sh_entsize);
+	}
+}
 
 void	ft_memmove(void *dst, const void *src, size_t n) {
 	uint8_t *d = (uint8_t *)dst;
@@ -32,8 +58,9 @@ static Elf64_Shdr* find_section_by_name(data_t *data, char *name) {
 	for (size_t i = 0; i < header->e_shnum; i++) {
 		if (ft_memcmp(strtab_p + shdr[i].sh_name, name, ft_strlen(name)) == 0) {
 			DEBUG_P("find_section_by_name: Found section %s at %lx\n", name, shdr[i].sh_addr);
-			if (ft_memcmp(name, ".text", 5) == 0)
+			if (ft_memcmp(name, ".text", 5) == 0) {
 				data->_oentry_offset = shdr[i].sh_addr;
+			}
 			return (&shdr[i]);
 		}
 	}
@@ -55,76 +82,72 @@ static Elf64_Shdr* find_section_by_address(data_t *data, size_t address) {
 	return (NULL);
 }
 
+
+Elf64_Phdr *get_last_phdr(data_t *data) {
+	Elf64_Ehdr	*header = (Elf64_Ehdr *)data->_file_map;
+	Elf64_Phdr	*phdr = (Elf64_Phdr *)(data->_file_map + header->e_phoff);
+
+	return (&phdr[header->e_phnum - 1]);
+}
+
+Elf64_Phdr *create_segment(data_t *data) {
+	Elf64_Ehdr	*header = (Elf64_Ehdr *)data->_file_map;
+	Elf64_Phdr	*phdr = (Elf64_Phdr *)(data->_file_map + header->e_phoff);
+	Elf64_Phdr	*new_phdr = (Elf64_Phdr *)(data->_file_map + header->e_phoff + header->e_phnum * sizeof(Elf64_Phdr));
+
+	printf("header->e_phoff: %lx, header->e_phnum: %x\n", header->e_phoff, header->e_phnum);
+	printf("calcuated pos %lx\n", header->e_phoff + header->e_phnum * sizeof(Elf64_Phdr));
+
+	Elf64_Phdr	*last_phdr = get_last_phdr(data);
+
+	new_phdr->p_type = PT_LOAD;
+	new_phdr->p_flags = PF_R | PF_X;
+	new_phdr->p_offset = ALIGN(last_phdr->p_offset + last_phdr->p_filesz, PAGE_SIZE);
+	new_phdr->p_vaddr = ALIGN(last_phdr->p_vaddr + last_phdr->p_filesz, PAGE_SIZE);
+	new_phdr->p_paddr = ALIGN(last_phdr->p_paddr + last_phdr->p_filesz, PAGE_SIZE);
+	new_phdr->p_filesz = g_payload_size;
+	new_phdr->p_memsz = g_payload_size;
+	new_phdr->p_align = PAGE_SIZE;
+
+
+	printf("data->_file_size: %lx\n", data->_file_size);
+
+
+	printf("new_phdr->p_offset: %lx, new_phdr->p_vaddr: %lx, new_phdr->p_paddr: %lx\n", new_phdr->p_offset, new_phdr->p_vaddr, new_phdr->p_paddr);
+
+	header->e_phnum++;
+
+	return (new_phdr);
+}
+
+
 static int	find_codecave(data_t *data, size_t *codecave_offset, size_t *codecave_size) {
 
 	Elf64_Ehdr	*ehdr	= (Elf64_Ehdr *)data->_file_map;
 	Elf64_Phdr	*phdr	= (Elf64_Phdr *)(data->_file_map + ehdr->e_phoff);
 	Elf64_Shdr	*shdr	= (Elf64_Shdr *)(data->_file_map + ehdr->e_shoff);
 
-	// data infection, after .data before .bss
-	printf("section header offset: %lx\n", ehdr->e_shoff);
-	printf("program header offset: %lx\n", ehdr->e_phoff);
+	Elf64_Phdr	*new_phdr = create_segment(data);
 
-	for (size_t i = 0; i < ehdr->e_phnum; i++) {
-		if (phdr[i].p_type == PT_LOAD && phdr[i].p_flags & PF_W)
-		{
-			Elf64_Shdr *codec = find_section_by_address(data, phdr[i].p_vaddr + phdr[i].p_filesz);
-			if (codec) {
-				//printf("changing section header\n");
-				codec->sh_size += g_payload_size;
-				codec->sh_offset += g_payload_size;
-				//ft_memmove(data->_file_map + codec->sh_offset, data->_file_map + codec->sh_offset - g_payload_size, data->_file_size - codec->sh_offset);
-				for (size_t j = 0; j < ehdr->e_shnum; j++) {
-					if (shdr[j].sh_offset > codec->sh_offset) {
-						//shdr[j].sh_offset += g_payload_size;
-						//shdr[j].sh_addr += g_payload_size;
-					}
-				}
-				//codec->sh_addr += g_payload_size;
-				//size_t rest = data->_file_size - (data->_file_size - codec->sh_offset) - 1;
-				//ehdr->e_shoff += g_payload_size;
 
-				//codec->sh_flags |= SHF_EXECINSTR;
+	printf("old entry: %lx\n", data->_oentry_offset);
+	ehdr->e_entry = new_phdr->p_vaddr;
 
-			}
-			ehdr->e_entry = phdr[i].p_vaddr + phdr[i].p_filesz;
-			*codecave_offset = phdr[i].p_offset + phdr[i].p_filesz;
-			*codecave_size = g_payload_size;
-			phdr[i].p_filesz += g_payload_size;
-			phdr[i].p_memsz += g_payload_size;
-			phdr[i].p_flags |= PF_X;
-			DEBUG_P("find_codecave: Found codecave at %lx\n", *codecave_offset);
+	printf("new_phdr->p_vaddr: %lx\n", new_phdr->p_vaddr);
+	printf("new_phdr->p_vaddr + new_phdr->p_filesz: %lx\n", new_phdr->p_vaddr + new_phdr->p_filesz);
+	printf("new_phdr->p_offset: %lx\n", new_phdr->p_offset);
+	printf("new_phdr->p_filesz: %lx\n", new_phdr->p_filesz);
+
+	int32_t jmp_range = (int64_t)data->_oentry_offset - (new_phdr->p_vaddr + new_phdr->p_filesz);
+
+	printf("jmp_range: %i\n", jmp_range);
+
+	modify_payload(jmp_range, JMP_OFFSET, sizeof(jmp_range));
+
+	ft_memcpy((uint8_t *)data->_file_map + new_phdr->p_offset, g_payload, g_payload_size);
 
 
 
-			int32_t	jmp_range = (int64_t)data->_oentry_offset - ((int64_t)phdr[i].p_vaddr + (int64_t)phdr[i].p_filesz);
-			printf("real entry point: %lx\n", *codecave_offset);
-			//int64_t key;
-			//
-			//if (gen_key_64(&key) == -1)
-			//	return EXIT_FAILURE;
-			//
-			//uint64_t start = *codecave_offset - data->_oentry_offset;
-			//
-			//if (print_key(key))
-			//	return EXIT_FAILURE;
-
-
-			PRINT("Old entry: %lx, phdr[i].p_vaddr: %lx, phdr[i].p_filesz: %lx, phdr[i].p_offset: %lx\n", data->_oentry_offset, phdr[i].p_vaddr, phdr[i].p_filesz, phdr[i].p_offset);
-			modify_payload(jmp_range, JMP_OFFSET, sizeof(jmp_range));
-
-			//encrypt(data->_file_map + data->_oentry_offset, phdr[i].p_filesz, key);
-
-			//patch_payload(start, key, jmp_range);
-
-			ft_memcpy(data->_file_map + *codecave_offset, g_payload, g_payload_size);
-
-
-			PRINT("Found codecave program ehdr.address: %lx, offset: %lx\n", phdr[i].p_vaddr, *codecave_offset);
-			PRINT("Old entry: %lx, new entry: %lx, jmp range: %i\n", data->_oentry_offset, ehdr->e_entry, jmp_range);
-
-		}
-	}
 	return (EXIT_SUCCESS);
 }
 
@@ -158,7 +181,7 @@ static int	patch_new_file(data_t *data) {
 	if (fd == -1)
 		return (EXIT_FAILURE);
 
-	if (write(fd, data->_file_map, data->_file_size) == -1) {
+	if (write(fd, data->_file_map, data->_mapped_size) == -1) {
 		close(fd);
 		return (EXIT_FAILURE);
 	}
@@ -223,6 +246,7 @@ int init_data(data_t* data, const char *filename) {
 	data->_file_map      = NULL;
 	data->_file_size     = 0U;
 	data->_oentry_offset = 0U;
+	data->_mapped_size   = 0U;
 
 	data->_fd = open(filename, O_RDWR);
 
@@ -248,42 +272,51 @@ int init_data(data_t* data, const char *filename) {
 			return -1;
 		}
 	}
+	
+	lseek(data->_fd, 0, SEEK_SET);
 
+	struct stat st;
 
-	const ssize_t file_size = lseek(data->_fd, 0, SEEK_END);
-
-	if (file_size == -1) {
+	if (fstat(data->_fd, &st) == -1) {
 		runtime_error("Failed to get file size");
 		return -1;
 	}
 
-	data->_file_size = (size_t)file_size;
-
-	printf("file size: %zu\n", data->_file_size);
-	printf("file size: %zu\n", data->_file_size);
+	printf("File size: %ld\n", st.st_size);
 
 
-	uint8_t *file_map = mmap(NULL, data->_file_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, data->_fd, 0);
+	void *file_map = mmap(NULL, st.st_size , PROT_READ | PROT_WRITE, MAP_PRIVATE, data->_fd, 0);
 
 	if (file_map == MAP_FAILED) {
 		runtime_error("Failed to map file");
 		return -1;
 	}
 
-	uint8_t *new_map = mmap(NULL, data->_file_size + PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-
-	if (new_map == MAP_FAILED) {
+	//char buffer[4096];
+	//ssize_t bytes_read = 0;
+	//
+	//void *file_map_start = file_map;
+	//while ((bytes_read = read(data->_fd, buffer, 4096)) > 0) {
+	//	ft_memmove(file_map, buffer, bytes_read);
+	//	file_map = (uint8_t *)file_map + bytes_read;
+	//}
+	//
+	//
+	data->_mapped_size = st.st_size + PAGE_SIZE;
+	void *file_map_big = mmap(NULL, data->_mapped_size , PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	if (file_map_big == MAP_FAILED) {
 		runtime_error("Failed to map file");
 		return -1;
 	}
 
-	ft_memcpy(new_map, file_map, data->_file_size);
+	ft_memmove(file_map_big, file_map, st.st_size);
+	memset((uint8_t *)file_map_big + st.st_size, 0, PAGE_SIZE);
 
-	munmap(file_map, data->_file_size);
+	data->_file_map = file_map_big;
+	data->_file_size = st.st_size;
+	printf("File size: %ld\n", data->_mapped_size);
 
-	data->_file_size += PAGE_SIZE;
-
-	data->_file_map = new_map;
+	munmap(file_map, st.st_size);
 
 	return 0;
 }
