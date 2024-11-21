@@ -71,18 +71,24 @@ static int	find_codecave(data_t *data, size_t *codecave_offset, size_t *codecave
 			Elf64_Shdr *codec = find_section_by_address(data, phdr[i].p_vaddr + phdr[i].p_filesz);
 			if (codec) {
 				//printf("changing section header\n");
-				//codec->sh_size += g_payload_size;
-				//codec->sh_offset += g_payload_size;
-				//ehdr->e_shoff += g_payload_size;
+				codec->sh_size += g_payload_size;
+				codec->sh_offset += g_payload_size;
+				//ft_memmove(data->_file_map + codec->sh_offset, data->_file_map + codec->sh_offset - g_payload_size, data->_file_size - codec->sh_offset);
+				for (size_t j = 0; j < ehdr->e_shnum; j++) {
+					if (shdr[j].sh_offset > codec->sh_offset) {
+						//shdr[j].sh_offset += g_payload_size;
+						//shdr[j].sh_addr += g_payload_size;
+					}
+				}
 				//codec->sh_addr += g_payload_size;
+				//size_t rest = data->_file_size - (data->_file_size - codec->sh_offset) - 1;
+				//ehdr->e_shoff += g_payload_size;
 
 				//codec->sh_flags |= SHF_EXECINSTR;
 
 			}
 			ehdr->e_entry = phdr[i].p_vaddr + phdr[i].p_filesz;
 			*codecave_offset = phdr[i].p_offset + phdr[i].p_filesz;
-
-
 			*codecave_size = g_payload_size;
 			phdr[i].p_filesz += g_payload_size;
 			phdr[i].p_memsz += g_payload_size;
@@ -92,6 +98,7 @@ static int	find_codecave(data_t *data, size_t *codecave_offset, size_t *codecave
 
 
 			int32_t	jmp_range = (int64_t)data->_oentry_offset - ((int64_t)phdr[i].p_vaddr + (int64_t)phdr[i].p_filesz);
+			printf("real entry point: %lx\n", *codecave_offset);
 			//int64_t key;
 			//
 			//if (gen_key_64(&key) == -1)
