@@ -14,3 +14,8 @@ The goal is to create a simple virus that will infect a binary file.
 
 ![image](https://github.com/user-attachments/assets/c061dc39-6490-4ddd-a470-88184353f8cc)
 
+## How an objdump looks after being encrypted
+
+![image](https://github.com/user-attachments/assets/e739e9d8-5099-48b5-ba67-ccc233c16dc7)
+
+
